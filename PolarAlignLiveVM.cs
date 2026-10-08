@@ -30,6 +30,7 @@ namespace PolarAlignLive {
     public class PolarAlignLiveVM : DockableVM {
 
         private readonly IProfileService profileService;
+        private readonly ICameraMediator cameraMediator;
         private readonly ITelescopeMediator telescopeMediator;
         private readonly IImagingMediator imagingMediator;
         private readonly IFilterWheelMediator filterWheelMediator;
@@ -44,11 +45,13 @@ namespace PolarAlignLive {
 
         [ImportingConstructor]
         public PolarAlignLiveVM(IProfileService profileService,
+                                ICameraMediator cameraMediator,
                                 ITelescopeMediator telescopeMediator,
                                 IImagingMediator imagingMediator,
                                 IFilterWheelMediator filterWheelMediator,
                                 IPlateSolverFactory plateSolverFactory) : base(profileService) {
             this.profileService = profileService;
+            this.cameraMediator = cameraMediator;
             this.telescopeMediator = telescopeMediator;
             this.imagingMediator = imagingMediator;
             this.filterWheelMediator = filterWheelMediator;
@@ -67,12 +70,18 @@ namespace PolarAlignLive {
             StartLiveCommand = new AsyncRelayCommand(StartLive, () => !IsBusy && axis != null);
             StopCommand = new RelayCommand(Stop, () => IsBusy);
             ResetCommand = new RelayCommand(Reset, () => !IsBusy);
+            DimmerUpCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(0.1));
+            DimmerDownCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(-0.1));
         }
 
         public ICommand CaptureFrameCommand { get; }
         public ICommand StartLiveCommand { get; }
         public ICommand StopCommand { get; }
         public ICommand ResetCommand { get; }
+        public ICommand DimmerUpCommand { get; }
+        public ICommand DimmerDownCommand { get; }
+
+        public NightTheme Theme => NightTheme.Instance;
 
         // ---------- bindable state ----------
 
@@ -171,9 +180,27 @@ namespace PolarAlignLive {
             PositionAngleDeg = r.PositionAngle
         };
 
+        private bool EquipmentReady() {
+            if (!cameraMediator.GetInfo().Connected) {
+                Status = "Connect a camera first (Equipment tab).";
+                return false;
+            }
+            if (!telescopeMediator.GetInfo().Connected) {
+                Status = "Connect the mount first (Equipment tab).";
+                return false;
+            }
+            return true;
+        }
+
+        private static string FriendlyError(Exception ex) {
+            if (ex.GetType().Name == "CameraConnectionLostException") return "Camera connection lost. Reconnect the camera and try again.";
+            return "Error: " + ex.Message;
+        }
+
         // ---------- commands ----------
 
         private async Task CaptureFrame() {
+            if (!EquipmentReady()) return;
             cts = new CancellationTokenSource();
             IsBusy = true;
             try {
@@ -223,7 +250,7 @@ namespace PolarAlignLive {
             } catch (OperationCanceledException) {
                 Status = "Cancelled.";
             } catch (Exception ex) {
-                Status = "Error: " + ex.Message;
+                Status = FriendlyError(ex);
             } finally {
                 IsBusy = false;
             }
@@ -231,6 +258,7 @@ namespace PolarAlignLive {
 
         private async Task StartLive() {
             if (axis == null) return;
+            if (!EquipmentReady()) return;
             cts = new CancellationTokenSource();
             var ct = cts.Token;
             IsBusy = true;
@@ -270,7 +298,7 @@ namespace PolarAlignLive {
             } catch (OperationCanceledException) {
                 Status = "Stopped.";
             } catch (Exception ex) {
-                Status = "Error: " + ex.Message;
+                Status = FriendlyError(ex);
             } finally {
                 IsBusy = false;
             }

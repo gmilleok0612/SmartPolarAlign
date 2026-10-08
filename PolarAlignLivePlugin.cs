@@ -9,7 +9,9 @@ namespace PolarAlignLive {
 
         [ImportingConstructor]
         public PolarAlignLivePlugin(IProfileService profileService) {
-            // Nothing to initialise; the dockable VM is exported separately.
         }
+
+        /// <summary>Bound by the plugin Options page template ("Polar Align Live_Options").</summary>
+        public NightTheme Theme => NightTheme.Instance;
     }
 }
