@@ -6,6 +6,8 @@
 
     <!-- All colours come from NightTheme (bound through the VM's Theme property). No hard-coded light colours. -->
 
+    <BooleanToVisibilityConverter x:Key="PalBool" />
+
     <Style x:Key="PalButton" TargetType="Button">
         <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
         <Setter Property="Background" Value="{Binding Theme.FillBrush}" />
@@ -119,7 +121,7 @@
 
     <!-- Key must be <VM full type name>_Dockable (NINA's pane template selector looks it up). -->
     <DataTemplate x:Key="PolarAlignLive.PolarAlignLiveVM_Dockable" DataType="{x:Type local:PolarAlignLiveVM}">
-        <Grid Background="Black" MinWidth="320" MinHeight="460">
+        <Grid Background="Black" MinWidth="320" MinHeight="550">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -135,13 +137,29 @@
                 <TextBlock Text="{Binding AxisQualityText}" Style="{StaticResource PalDimLabel}" TextWrapping="Wrap" />
             </StackPanel>
 
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,0">
+            <StackPanel Grid.Row="1" Margin="8,0">
+            <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Exp (s)" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
                 <TextBox Width="50" Margin="4,0,12,0" Style="{StaticResource PalTextBox}" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" />
                 <TextBlock Text="Gain" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
                 <TextBox Width="50" Margin="4,0,12,0" Style="{StaticResource PalTextBox}" Text="{Binding Gain, UpdateSourceTrigger=LostFocus}" />
                 <TextBlock Text="Bin" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
                 <TextBox Width="30" Margin="4,0,0,0" Style="{StaticResource PalTextBox}" Text="{Binding Binning, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="Auto: step°" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="36" Margin="4,0,10,0" Style="{StaticResource PalTextBox}" Text="{Binding AutoStepDeg, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="min alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="36" Margin="4,0,10,0" Style="{StaticResource PalTextBox}" Text="{Binding MinAltDeg, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="max alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="36" Margin="4,0,0,0" Style="{StaticResource PalTextBox}" Text="{Binding MaxAltDeg, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="Crop" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <RadioButton GroupName="PalCrop" Content="100%" Style="{StaticResource PalChoice}" MinWidth="44" IsChecked="{Binding Crop100, Mode=TwoWay}" />
+                <RadioButton GroupName="PalCrop" Content="50%" Style="{StaticResource PalChoice}" MinWidth="44" IsChecked="{Binding Crop50, Mode=TwoWay}" />
+                <RadioButton GroupName="PalCrop" Content="25%" Style="{StaticResource PalChoice}" MinWidth="44" IsChecked="{Binding Crop25, Mode=TwoWay}" />
+            </StackPanel>
             </StackPanel>
 
             <!-- Night mode controls -->
@@ -168,6 +186,17 @@
                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
 
             <StackPanel Grid.Row="4" Margin="8,2">
+                <Border Visibility="{Binding ConfirmPending, Converter={StaticResource PalBool}}"
+                        BorderBrush="{Binding Theme.TextBrush}" BorderThickness="3" CornerRadius="3" Padding="8" Margin="0,0,0,6"
+                        Background="{Binding Theme.FillBrush}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding ConfirmText}" Style="{StaticResource PalLabel}" TextWrapping="Wrap" FontWeight="Bold" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
+                            <Button Content="SLEW" Style="{StaticResource PalButton}" Command="{Binding ConfirmSlewCommand}" />
+                            <Button Content="CANCEL" Style="{StaticResource PalButton}" Command="{Binding CancelSlewCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
                 <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalLabel}" FontSize="18" FontWeight="Bold" />
                 <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalLabel}" FontSize="18" FontWeight="Bold" />
                 <TextBlock Text="{Binding TotalErrorText}" Style="{StaticResource PalDimLabel}" FontSize="14" />
@@ -175,7 +204,8 @@
             </StackPanel>
 
             <WrapPanel Grid.Row="5" Margin="5,2,5,6">
-                <Button Style="{StaticResource PalButton}" Content="Capture Frame" Command="{Binding CaptureFrameCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Capture Frame (manual)" Command="{Binding CaptureFrameCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Auto Capture (3 frames)" Command="{Binding AutoCaptureCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Start Live" Command="{Binding StartLiveCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Stop" Command="{Binding StopCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Reset" Command="{Binding ResetCommand}" />
