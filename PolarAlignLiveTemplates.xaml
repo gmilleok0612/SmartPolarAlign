@@ -4,17 +4,79 @@
                     xmlns:local="clr-namespace:PolarAlignLive"
                     xmlns:ui="clr-namespace:PolarAlignLive.UI">
 
-    <SolidColorBrush x:Key="PalRed" Color="#E02020" />
-    <SolidColorBrush x:Key="PalDimRed" Color="#7A1010" />
+    <!-- Night palette: no white anywhere, everything dim red on black. -->
+    <SolidColorBrush x:Key="PalText" Color="#B01818" />
+    <SolidColorBrush x:Key="PalDim" Color="#6A1010" />
+    <SolidColorBrush x:Key="PalBorder" Color="#5A0E0E" />
+    <SolidColorBrush x:Key="PalFill" Color="#180000" />
+    <SolidColorBrush x:Key="PalFillHover" Color="#2A0000" />
+    <SolidColorBrush x:Key="PalFillPressed" Color="#3A0000" />
+    <SolidColorBrush x:Key="PalDisabledText" Color="#400A0A" />
+    <SolidColorBrush x:Key="PalDisabledBorder" Color="#2A0606" />
 
     <Style x:Key="PalButton" TargetType="Button">
-        <Setter Property="Foreground" Value="{StaticResource PalRed}" />
-        <Setter Property="Background" Value="#200000" />
-        <Setter Property="BorderBrush" Value="{StaticResource PalRed}" />
+        <Setter Property="Foreground" Value="{StaticResource PalText}" />
+        <Setter Property="Background" Value="{StaticResource PalFill}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PalBorder}" />
         <Setter Property="BorderThickness" Value="1.5" />
         <Setter Property="Padding" Value="10,6" />
         <Setter Property="Margin" Value="3" />
         <Setter Property="MinWidth" Value="90" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="3" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PalFillHover}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PalFillPressed}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource PalDisabledText}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource PalDisabledBorder}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PalTextBox" TargetType="TextBox">
+        <Setter Property="Foreground" Value="{StaticResource PalText}" />
+        <Setter Property="Background" Value="Black" />
+        <Setter Property="BorderBrush" Value="{StaticResource PalBorder}" />
+        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="CaretBrush" Value="{StaticResource PalText}" />
+        <Setter Property="SelectionBrush" Value="{StaticResource PalFillPressed}" />
+        <Setter Property="SelectionTextBrush" Value="{StaticResource PalText}" />
+        <Setter Property="Padding" Value="3,2" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="2">
+                        <ScrollViewer x:Name="PART_ContentHost" Padding="{TemplateBinding Padding}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PalLabel" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource PalText}" />
     </Style>
 
     <!-- Key must be <VM full type name>_Dockable (NINA's pane template selector looks it up). -->
@@ -29,28 +91,28 @@
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="8,6">
-                <TextBlock Text="{Binding Instructions}" Foreground="{StaticResource PalRed}" TextWrapping="Wrap" FontSize="13" />
-                <TextBlock Text="{Binding FrameCountText}" Foreground="{StaticResource PalDimRed}" Margin="0,4,0,0" />
-                <TextBlock Text="{Binding AxisQualityText}" Foreground="{StaticResource PalDimRed}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Instructions}" Foreground="{StaticResource PalText}" TextWrapping="Wrap" FontSize="13" />
+                <TextBlock Text="{Binding FrameCountText}" Foreground="{StaticResource PalDim}" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding AxisQualityText}" Foreground="{StaticResource PalDim}" TextWrapping="Wrap" />
             </StackPanel>
 
             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,0">
-                <TextBlock Text="Exp (s)" Foreground="{StaticResource PalRed}" VerticalAlignment="Center" />
-                <TextBox Width="50" Margin="4,0,12,0" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" />
-                <TextBlock Text="Gain" Foreground="{StaticResource PalRed}" VerticalAlignment="Center" />
-                <TextBox Width="50" Margin="4,0,12,0" Text="{Binding Gain, UpdateSourceTrigger=LostFocus}" />
-                <TextBlock Text="Bin" Foreground="{StaticResource PalRed}" VerticalAlignment="Center" />
-                <TextBox Width="30" Margin="4,0,0,0" Text="{Binding Binning, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="Exp (s)" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="50" Margin="4,0,12,0" Style="{StaticResource PalTextBox}" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="Gain" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="50" Margin="4,0,12,0" Style="{StaticResource PalTextBox}" Text="{Binding Gain, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="Bin" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="30" Margin="4,0,0,0" Style="{StaticResource PalTextBox}" Text="{Binding Binning, UpdateSourceTrigger=LostFocus}" />
             </StackPanel>
 
             <ui:PolarDisplay Grid.Row="2" Margin="4" MinHeight="260"
                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
 
             <StackPanel Grid.Row="3" Margin="8,2">
-                <TextBlock Text="{Binding MoveUpText}" Foreground="{StaticResource PalRed}" FontSize="18" FontWeight="Bold" />
-                <TextBlock Text="{Binding MoveEastText}" Foreground="{StaticResource PalRed}" FontSize="18" FontWeight="Bold" />
-                <TextBlock Text="{Binding TotalErrorText}" Foreground="{StaticResource PalDimRed}" FontSize="14" />
-                <TextBlock Text="{Binding Status}" Foreground="{StaticResource PalDimRed}" FontSize="11" Margin="0,2,0,0" />
+                <TextBlock Text="{Binding MoveUpText}" Foreground="{StaticResource PalText}" FontSize="18" FontWeight="Bold" />
+                <TextBlock Text="{Binding MoveEastText}" Foreground="{StaticResource PalText}" FontSize="18" FontWeight="Bold" />
+                <TextBlock Text="{Binding TotalErrorText}" Foreground="{StaticResource PalDim}" FontSize="14" />
+                <TextBlock Text="{Binding Status}" Foreground="{StaticResource PalDim}" FontSize="11" Margin="0,2,0,0" />
             </StackPanel>
 
             <WrapPanel Grid.Row="4" Margin="5,2,5,6">

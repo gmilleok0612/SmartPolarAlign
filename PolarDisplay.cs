@@ -30,8 +30,8 @@ namespace PolarAlignLive.UI {
         public double MoveEast { get => (double)GetValue(MoveEastProperty); set => SetValue(MoveEastProperty, value); }
         public bool HasSolution { get => (bool)GetValue(HasSolutionProperty); set => SetValue(HasSolutionProperty, value); }
 
-        private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xE0, 0x20, 0x20)));
-        private static readonly Brush DimRed = Freeze(new SolidColorBrush(Color.FromRgb(0x7A, 0x10, 0x10)));
+        private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xB0, 0x18, 0x18)));
+        private static readonly Brush DimRed = Freeze(new SolidColorBrush(Color.FromRgb(0x5A, 0x0E, 0x0E)));
         private static readonly Pen RingPen = Freeze(new Pen(DimRed, 1.5));
         private static readonly Pen BoldPen = Freeze(new Pen(Red, 3));
         private static readonly Pen ChevronPen = Freeze(new Pen(Red, 4) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round });
