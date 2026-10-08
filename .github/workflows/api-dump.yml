@@ -1,0 +1,50 @@
+=name: nina-api-dump
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/api-dump.yml'
+permissions:
+  contents: write
+jobs:
+  dump:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore NINA packages
+        shell: pwsh
+        run: dotnet restore PolarAlignLive.csproj
+      - name: Decompile NINA assemblies
+        shell: pwsh
+        run: |
+          dotnet tool install -g ilspycmd --version 8.2.0.7535
+          $pk = Join-Path $env:USERPROFILE ".nuget\packages"
+          New-Item -ItemType Directory -Force -Path dec | Out-Null
+          Get-ChildItem $pk -Recurse -Filter "NINA.*.dll" | Where-Object { $_.FullName -match "\\lib\\" } | ForEach-Object {
+            $out = Join-Path "dec" $_.BaseName
+            if (-not (Test-Path $out)) { ilspycmd -p -o $out $_.FullName | Out-Null }
+          }
+      - name: Collect API files
+        shell: pwsh
+        run: |
+          $names = 'CaptureSequence','ICameraMediator','IImagingMediator','ICaptureSolver','IImageSolver','IPlateSolver','PlateSolveParameter','CaptureSolverParameter','ITelescopeMediator','TelescopeInfo','CameraInfo','IExposureData','IPlateSolverFactory','PlateSolveResult','IImageData','ImagingMediator'
+          $sb = New-Object System.Text.StringBuilder
+          foreach ($n in $names) {
+            Get-ChildItem dec -Recurse -Filter "$n.cs" | ForEach-Object {
+              [void]$sb.AppendLine("//// FILE: " + $_.FullName)
+              [void]$sb.AppendLine((Get-Content $_.FullName -Raw))
+            }
+          }
+          New-Item -ItemType Directory -Force -Path apidump | Out-Null
+          $sb.ToString() | Set-Content apidump/nina-api.txt -Encoding utf8
+      - name: Commit result
+        shell: pwsh
+        run: |
+          git config user.name "api-dump"
+          git config user.email "api-dump@users.noreply.github.com"
+          git add apidump/nina-api.txt
+          git commit -m "NINA API dump [skip ci]"
+          git push
