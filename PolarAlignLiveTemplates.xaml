@@ -1,0 +1,64 @@
+<ResourceDictionary x:Class="PolarAlignLive.UI.PolarAlignLiveTemplates"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:PolarAlignLive"
+                    xmlns:ui="clr-namespace:PolarAlignLive.UI">
+
+    <SolidColorBrush x:Key="PalRed" Color="#E02020" />
+    <SolidColorBrush x:Key="PalDimRed" Color="#7A1010" />
+
+    <Style x:Key="PalButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource PalRed}" />
+        <Setter Property="Background" Value="#200000" />
+        <Setter Property="BorderBrush" Value="{StaticResource PalRed}" />
+        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Margin" Value="3" />
+        <Setter Property="MinWidth" Value="90" />
+    </Style>
+
+    <!-- Key must be <VM full type name>_Dockable (NINA's pane template selector looks it up). -->
+    <DataTemplate x:Key="PolarAlignLive.PolarAlignLiveVM_Dockable" DataType="{x:Type local:PolarAlignLiveVM}">
+        <Grid Background="Black" MinWidth="320" MinHeight="420">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Margin="8,6">
+                <TextBlock Text="{Binding Instructions}" Foreground="{StaticResource PalRed}" TextWrapping="Wrap" FontSize="13" />
+                <TextBlock Text="{Binding FrameCountText}" Foreground="{StaticResource PalDimRed}" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding AxisQualityText}" Foreground="{StaticResource PalDimRed}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,0">
+                <TextBlock Text="Exp (s)" Foreground="{StaticResource PalRed}" VerticalAlignment="Center" />
+                <TextBox Width="50" Margin="4,0,12,0" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="Gain" Foreground="{StaticResource PalRed}" VerticalAlignment="Center" />
+                <TextBox Width="50" Margin="4,0,12,0" Text="{Binding Gain, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="Bin" Foreground="{StaticResource PalRed}" VerticalAlignment="Center" />
+                <TextBox Width="30" Margin="4,0,0,0" Text="{Binding Binning, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+
+            <ui:PolarDisplay Grid.Row="2" Margin="4" MinHeight="260"
+                             MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
+
+            <StackPanel Grid.Row="3" Margin="8,2">
+                <TextBlock Text="{Binding MoveUpText}" Foreground="{StaticResource PalRed}" FontSize="18" FontWeight="Bold" />
+                <TextBlock Text="{Binding MoveEastText}" Foreground="{StaticResource PalRed}" FontSize="18" FontWeight="Bold" />
+                <TextBlock Text="{Binding TotalErrorText}" Foreground="{StaticResource PalDimRed}" FontSize="14" />
+                <TextBlock Text="{Binding Status}" Foreground="{StaticResource PalDimRed}" FontSize="11" Margin="0,2,0,0" />
+            </StackPanel>
+
+            <WrapPanel Grid.Row="4" Margin="5,2,5,6">
+                <Button Style="{StaticResource PalButton}" Content="Capture Frame" Command="{Binding CaptureFrameCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Start Live" Command="{Binding StartLiveCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Stop" Command="{Binding StopCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Reset" Command="{Binding ResetCommand}" />
+            </WrapPanel>
+        </Grid>
+    </DataTemplate>
+</ResourceDictionary>
