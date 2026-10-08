@@ -25,4 +25,11 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
 
+  <!-- Ignore stray flat copies at the repo root; the real files live in Astro/, Properties/ and UI/. -->
+  <ItemGroup>
+    <Compile Remove="AssemblyInfo.cs;PolarMath.cs;PolarDisplay.cs;PolarAlignLiveTemplates.xaml.cs" />
+    <Page Remove="PolarAlignLiveTemplates.xaml" />
+    <None Remove="*.dll;*.pdb" />
+  </ItemGroup>
+
 </Project>
