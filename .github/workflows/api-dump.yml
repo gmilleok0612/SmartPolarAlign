@@ -16,7 +16,7 @@ jobs:
           dotnet-version: 8.0.x
       - name: Build (to collect NINA assemblies)
         shell: pwsh
-        run: dotnet build PolarAlignLive.csproj -c Release -o out
+        run: dotnet build PolarAlignLive.csproj -c Release -o out p:CopyLocalLockFileAssemblies=true 
       - name: Dump NINA API by reflection
         shell: pwsh
         run: |
