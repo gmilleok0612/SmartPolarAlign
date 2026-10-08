@@ -14,32 +14,34 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Restore NINA packages
+      - name: Build (to collect NINA assemblies)
         shell: pwsh
-        run: dotnet restore PolarAlignLive.csproj
-      - name: Decompile NINA assemblies
-        shell: pwsh
-        run: |
-          dotnet tool install -g ilspycmd --version 8.2.0.7535
-          $pk = Join-Path $env:USERPROFILE ".nuget\packages"
-          New-Item -ItemType Directory -Force -Path dec | Out-Null
-          Get-ChildItem $pk -Recurse -Filter "NINA.*.dll" | Where-Object { $_.FullName -match "\\lib\\" } | ForEach-Object {
-            $out = Join-Path "dec" $_.BaseName
-            if (-not (Test-Path $out)) { ilspycmd -p -o $out $_.FullName | Out-Null }
-          }
-      - name: Collect API files
+        run: dotnet build PolarAlignLive.csproj -c Release -o out
+      - name: Dump NINA API by reflection
         shell: pwsh
         run: |
-          $names = 'CaptureSequence','ICameraMediator','IImagingMediator','ICaptureSolver','IImageSolver','IPlateSolver','PlateSolveParameter','CaptureSolverParameter','ITelescopeMediator','TelescopeInfo','CameraInfo','IExposureData','IPlateSolverFactory','PlateSolveResult','IImageData','ImagingMediator'
+          $ErrorActionPreference = 'Continue'
+          $names = @('CaptureSequence','ICameraMediator','IImagingMediator','ICaptureSolver','IImageSolver','IPlateSolver','PlateSolveParameter','CaptureSolverParameter','ITelescopeMediator','TelescopeInfo','CameraInfo','IExposureData','IPlateSolverFactory','PlateSolveResult','IImageData','IImageDataFactory','PierSide')
           $sb = New-Object System.Text.StringBuilder
-          foreach ($n in $names) {
-            Get-ChildItem dec -Recurse -Filter "$n.cs" | ForEach-Object {
-              [void]$sb.AppendLine("//// FILE: " + $_.FullName)
-              [void]$sb.AppendLine((Get-Content $_.FullName -Raw))
+          $flags = [System.Reflection.BindingFlags]'Public,Instance,Static,DeclaredOnly'
+          foreach ($dll in Get-ChildItem out -Filter 'NINA*.dll') {
+            try { $asm = [System.Reflection.Assembly]::LoadFrom($dll.FullName) } catch { [void]$sb.AppendLine("//// LOADFAIL " + $dll.Name + " " + $_.Exception.Message); continue }
+            try { $types = $asm.GetTypes() } catch [System.Reflection.ReflectionTypeLoadException] { $types = $_.Exception.Types | Where-Object { $_ } } catch { continue }
+            foreach ($t in $types) {
+              if ($names -contains $t.Name) {
+                [void]$sb.AppendLine("//// TYPE " + $t.FullName + "   [" + $dll.Name + "]")
+                try { [void]$sb.AppendLine("  interfaces: " + (($t.GetInterfaces() | ForEach-Object { $_.Name }) -join ', ')) } catch {}
+                try {
+                  if ($t.IsEnum) { [void]$sb.AppendLine("  enum values: " + (([Enum]::GetNames($t)) -join ', ')) }
+                  foreach ($m in $t.GetMembers($flags)) { [void]$sb.AppendLine("  " + $m.MemberType + " " + $m.ToString()) }
+                } catch { [void]$sb.AppendLine("  MEMBERFAIL " + $_.Exception.Message) }
+              }
             }
           }
           New-Item -ItemType Directory -Force -Path apidump | Out-Null
           $sb.ToString() | Set-Content apidump/nina-api.txt -Encoding utf8
+          $global:LASTEXITCODE = 0
+          exit 0
       - name: Commit result
         shell: pwsh
         run: |
