@@ -206,6 +206,7 @@
             <WrapPanel Grid.Row="5" Margin="5,2,5,6">
                 <Button Style="{StaticResource PalButton}" Content="Capture Frame (manual)" Command="{Binding CaptureFrameCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Auto Capture (3 frames)" Command="{Binding AutoCaptureCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Tracking On" Command="{Binding TrackingOnCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Start Live" Command="{Binding StartLiveCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Stop" Command="{Binding StopCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Reset" Command="{Binding ResetCommand}" />
