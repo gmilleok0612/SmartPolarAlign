@@ -1,4 +1,4 @@
-=name: nina-api-dump
+name: nina-api-dump
 on:
   workflow_dispatch:
   push:
