@@ -5,6 +5,7 @@ using NINA.Core.Model.Equipment;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Interfaces.ViewModel;
 using NINA.Equipment.Model;
+using NINA.Image.Interfaces;
 using NINA.PlateSolving;
 using NINA.PlateSolving.Interfaces;
 using NINA.Profile.Interfaces;
@@ -57,6 +58,7 @@ namespace PolarAlignLive {
             this.filterWheelMediator = filterWheelMediator;
             this.plateSolverFactory = plateSolverFactory;
 
+            LoadAutoSettings();
             Title = "Polar Align Live";
             CanClose = false;
 
@@ -70,6 +72,9 @@ namespace PolarAlignLive {
             StartLiveCommand = new AsyncRelayCommand(StartLive, () => !IsBusy && axis != null);
             StopCommand = new RelayCommand(Stop, () => IsBusy);
             ResetCommand = new RelayCommand(Reset, () => !IsBusy);
+            AutoCaptureCommand = new AsyncRelayCommand(AutoCapture, () => !IsBusy && axis == null);
+            ConfirmSlewCommand = new RelayCommand(() => confirmTcs?.TrySetResult(true));
+            CancelSlewCommand = new RelayCommand(() => confirmTcs?.TrySetResult(false));
             DimmerUpCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(0.1));
             DimmerDownCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(-0.1));
         }
@@ -78,6 +83,9 @@ namespace PolarAlignLive {
         public ICommand StartLiveCommand { get; }
         public ICommand StopCommand { get; }
         public ICommand ResetCommand { get; }
+        public ICommand AutoCaptureCommand { get; }
+        public ICommand ConfirmSlewCommand { get; }
+        public ICommand CancelSlewCommand { get; }
         public ICommand DimmerUpCommand { get; }
         public ICommand DimmerDownCommand { get; }
 
@@ -93,6 +101,60 @@ namespace PolarAlignLive {
 
         private short binning;
         public short Binning { get => binning; set { binning = Math.Max((short)1, value); RaisePropertyChanged(); } }
+
+        private double autoStepDeg = 20;
+        /// <summary>RA step between auto-captured frames, degrees (15..40).</summary>
+        public double AutoStepDeg { get => autoStepDeg; set { autoStepDeg = Math.Max(15, Math.Min(40, value)); RaisePropertyChanged(); SaveAutoSettings(); } }
+
+        private double minAltDeg = 20;
+        public double MinAltDeg { get => minAltDeg; set { minAltDeg = Math.Max(5, Math.Min(80, value)); RaisePropertyChanged(); SaveAutoSettings(); } }
+
+        private double maxAltDeg = 60;
+        /// <summary>Zenith guard: auto slews never go above this altitude (protects long tubes from the pier).</summary>
+        public double MaxAltDeg { get => maxAltDeg; set { maxAltDeg = Math.Max(20, Math.Min(85, value)); RaisePropertyChanged(); SaveAutoSettings(); } }
+
+        private static string AutoSettingsPath => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA", "PolarAlignLive.auto.settings");
+
+        private void LoadAutoSettings() {
+            try {
+                if (!System.IO.File.Exists(AutoSettingsPath)) return;
+                foreach (var line in System.IO.File.ReadAllLines(AutoSettingsPath)) {
+                    var kv = line.Split('=');
+                    if (kv.Length != 2 || !double.TryParse(kv[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) continue;
+                    if (kv[0] == "step") autoStepDeg = Math.Max(15, Math.Min(40, v));
+                    else if (kv[0] == "minalt") minAltDeg = Math.Max(5, Math.Min(80, v));
+                    else if (kv[0] == "maxalt") maxAltDeg = Math.Max(20, Math.Min(85, v));
+                    else if (kv[0] == "crop") cropPercent = v == 50 ? 50 : v == 25 ? 25 : 100;
+                }
+            } catch { }
+        }
+
+        private void SaveAutoSettings() {
+            try {
+                System.IO.File.WriteAllLines(AutoSettingsPath, new[] {
+                    "step=" + autoStepDeg.ToString(CultureInfo.InvariantCulture),
+                    "minalt=" + minAltDeg.ToString(CultureInfo.InvariantCulture),
+                    "maxalt=" + maxAltDeg.ToString(CultureInfo.InvariantCulture),
+                    "crop=" + cropPercent.ToString(CultureInfo.InvariantCulture) });
+            } catch { }
+        }
+
+        private int cropPercent = 100;
+        /// <summary>Centered hardware sub-frame: 100 (full), 50 or 25 percent of the sensor width/height.</summary>
+        public int CropPercent { get => cropPercent; set { cropPercent = value == 50 ? 50 : value == 25 ? 25 : 100; RaisePropertyChanged(); RaisePropertyChanged(nameof(Crop100)); RaisePropertyChanged(nameof(Crop50)); RaisePropertyChanged(nameof(Crop25)); SaveAutoSettings(); } }
+        public bool Crop100 { get => cropPercent == 100; set { if (value) CropPercent = 100; } }
+        public bool Crop50 { get => cropPercent == 50; set { if (value) CropPercent = 50; } }
+        public bool Crop25 { get => cropPercent == 25; set { if (value) CropPercent = 25; } }
+
+        private bool confirmPending;
+        public bool ConfirmPending { get => confirmPending; private set { confirmPending = value; RaisePropertyChanged(); } }
+
+        private string confirmText = "";
+        public string ConfirmText { get => confirmText; private set { confirmText = value; RaisePropertyChanged(); } }
+
+        private TaskCompletionSource<bool> confirmTcs;
+        private bool autoRunning;
 
         private bool isBusy;
         public bool IsBusy { get => isBusy; private set { isBusy = value; RaisePropertyChanged(); NotifyCommands(); } }
@@ -136,6 +198,7 @@ namespace PolarAlignLive {
         private void NotifyCommands() {
             // Always called from UI-context continuations or UI commands.
             (CaptureFrameCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
+            (AutoCaptureCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
             (StartLiveCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
             (StopCommand as RelayCommand)?.NotifyCanExecuteChanged();
             (ResetCommand as RelayCommand)?.NotifyCanExecuteChanged();
@@ -163,9 +226,29 @@ namespace PolarAlignLive {
                 BlindFailoverEnabled = allowBlind && p.PlateSolveSettings.BlindFailoverEnabled,
                 DisableNotifications = !allowBlind
             };
-            seq = new CaptureSequence(ExposureTime, CaptureSequence.ImageTypes.SNAPSHOT, p.PlateSolveSettings.Filter,
-                                      new BinningMode(Binning, Binning), 1) { Gain = Gain };
+            seq = MakeSequence();
             return solver;
+        }
+
+        /// <summary>Builds a fresh exposure request from the current Exp / Gain / Bin / Crop settings.</summary>
+        private CaptureSequence MakeSequence() {
+            var p = profileService.ActiveProfile;
+            var seq = new CaptureSequence(ExposureTime, CaptureSequence.ImageTypes.SNAPSHOT, p.PlateSolveSettings.Filter,
+                                          new BinningMode(Binning, Binning), 1) { Gain = Gain };
+            try {
+                var cam = cameraMediator.GetInfo();
+                if (CropPercent < 100 && cam.CanSubSample && cam.XSize > 0 && cam.YSize > 0) {
+                    int bin = Math.Max(1, (int)Binning);
+                    int fullW = cam.XSize / bin, fullH = cam.YSize / bin;   // binned pixels
+                    int w = Math.Max(64, (fullW * CropPercent / 100) / 16 * 16);
+                    int h = Math.Max(64, (fullH * CropPercent / 100) / 16 * 16);
+                    int x = Math.Max(0, (fullW - w) / 2) / 2 * 2;
+                    int y = Math.Max(0, (fullH - h) / 2) / 2 * 2;
+                    seq.EnableSubSample = true;
+                    seq.SubSambleRectangle = new NINA.Core.Utility.ObservableRectangle(x, y, w, h);
+                }
+            } catch { }
+            return seq;
         }
 
         private async Task<PlateSolveResult> SolveOnce(ICaptureSolver solver, CaptureSolverParameter parameter, CaptureSequence seq, CancellationToken ct) {
@@ -204,54 +287,163 @@ namespace PolarAlignLive {
             cts = new CancellationTokenSource();
             IsBusy = true;
             try {
-                Status = $"Capturing + solving frame {frames.Count + 1}...";
-                var solver = BuildSolver(true, out var parameter, out var seq);
-                var result = await SolveOnce(solver, parameter, seq, cts.Token);
-                if (result == null || !result.Success || result.Coordinates == null) {
-                    Status = "Plate solve failed. Rotate/retry the same position or raise exposure.";
-                    return;
-                }
-
-                double mountDec = telescopeMediator.GetInfo().Connected ? telescopeMediator.GetInfo().Declination : double.NaN;
-                if (frames.Count > 0 && !double.IsNaN(mountDec) && mountDecs.Count > 0 && !double.IsNaN(mountDecs[0])
-                    && Math.Abs(mountDec - mountDecs[0]) > 0.5) {
-                    Status = "Mount Dec changed since frame 1. Rotate RA only. Frame not accepted.";
-                    return;
-                }
-
-                // Reject a frame that barely moved: the axis can't be derived from near-identical positions.
-                if (frames.Count > 0) {
-                    var f = ToFrame(result);
-                    double sep = PolarMath.AngleDeg(Vec3.FromRaDec(f.RaDeg, f.DecDeg),
-                                                    Vec3.FromRaDec(frames[frames.Count - 1].RaDeg, frames[frames.Count - 1].DecDeg));
-                    if (sep < 8.0) {
-                        Status = $"Only {sep:0.0}° from previous frame. Rotate RA at least ~20° and recapture.";
-                        return;
-                    }
-                }
-
-                frames.Add(ToFrame(result));
-                mountDecs.Add(mountDec);
-                FrameCountText = $"Frames: {frames.Count} / 3";
-
-                if (frames.Count < 3) {
-                    Status = $"Frame {frames.Count} solved.";
-                    Instructions = "Rotate the mount in RA only (>= ~20°, more is better; do not touch Dec), then capture the next frame.";
-                    return;
-                }
-
-                axis = PolarMath.SolveAxis(frames);
-                bool good = axis.ResidualDeg < 0.1 && axis.RotationDeg >= 15 &&
-                            (double.IsNaN(axis.RejectedResidualDeg) || axis.RejectedResidualDeg > 3 * axis.ResidualDeg);
-                AxisQualityText = $"Axis check: residual {axis.ResidualDeg * 60:0.0}′, rotation {axis.RotationDeg:0}°, PA sign {(axis.PaSign > 0 ? "+" : "-")}" +
-                                  (good ? " (good)" : " (POOR - consider Reset and use larger RA moves)");
-                Status = "Axis found.";
-                Instructions = "Press Start Live, then adjust the mount's altitude/azimuth bolts until the arrows reach zero. Do not move RA/Dec now.";
+                await CaptureCore(cts.Token);
             } catch (OperationCanceledException) {
                 Status = "Cancelled.";
             } catch (Exception ex) {
                 Status = FriendlyError(ex);
             } finally {
+                IsBusy = false;
+            }
+        }
+
+        /// <summary>Capture + solve one frame and store it. Returns true if the frame was accepted.</summary>
+        private async Task<bool> CaptureCore(CancellationToken ct) {
+            Status = $"Capturing + solving frame {frames.Count + 1}...";
+            var solver = BuildSolver(true, out var parameter, out var seq);
+            var result = await SolveOnce(solver, parameter, seq, ct);
+            if (result == null || !result.Success || result.Coordinates == null) {
+                Status = "Plate solve failed. Rotate/retry the same position or raise exposure.";
+                return false;
+            }
+
+            double mountDec = telescopeMediator.GetInfo().Connected ? telescopeMediator.GetInfo().Declination : double.NaN;
+            if (frames.Count > 0 && !double.IsNaN(mountDec) && mountDecs.Count > 0 && !double.IsNaN(mountDecs[0])
+                && Math.Abs(mountDec - mountDecs[0]) > 0.5) {
+                Status = "Mount Dec changed since frame 1. Rotate RA only. Frame not accepted.";
+                return false;
+            }
+
+            // Reject a frame that barely moved: the axis can't be derived from near-identical positions.
+            if (frames.Count > 0) {
+                var f = ToFrame(result);
+                double sep = PolarMath.AngleDeg(Vec3.FromRaDec(f.RaDeg, f.DecDeg),
+                                                Vec3.FromRaDec(frames[frames.Count - 1].RaDeg, frames[frames.Count - 1].DecDeg));
+                if (sep < 8.0) {
+                    Status = $"Only {sep:0.0}° from previous frame. Rotate RA at least ~20° and recapture.";
+                    return false;
+                }
+            }
+
+            frames.Add(ToFrame(result));
+            mountDecs.Add(mountDec);
+            FrameCountText = $"Frames: {frames.Count} / 3";
+
+            if (frames.Count < 3) {
+                Status = $"Frame {frames.Count} solved.";
+                Instructions = "Rotate the mount in RA only (>= ~20°, more is better; do not touch Dec), then capture the next frame.";
+                return true;
+            }
+
+            axis = PolarMath.SolveAxis(frames);
+            bool good = axis.ResidualDeg < 0.1 && axis.RotationDeg >= 15 &&
+                        (double.IsNaN(axis.RejectedResidualDeg) || axis.RejectedResidualDeg > 3 * axis.ResidualDeg);
+            AxisQualityText = $"Axis check: residual {axis.ResidualDeg * 60:0.0}′, rotation {axis.RotationDeg:0}°, PA sign {(axis.PaSign > 0 ? "+" : "-")}" +
+                              (good ? " (good)" : " (POOR - consider Reset and use larger RA moves)");
+            Status = "Axis found.";
+            Instructions = "Press Start Live, then adjust the mount's altitude/azimuth bolts until the arrows reach zero. Do not move RA/Dec now.";
+            return true;
+        }
+
+        // ---------- automatic RA-only capture ----------
+
+        private async Task<bool> WaitForConfirm(CancellationToken ct) {
+            confirmTcs = new TaskCompletionSource<bool>();
+            using (ct.Register(() => confirmTcs.TrySetResult(false))) {
+                return await confirmTcs.Task;
+            }
+        }
+
+        private static string RaText(double raDeg) {
+            double h = raDeg / 15.0;
+            int hh = (int)h; double m = (h - hh) * 60.0;
+            return $"{hh:00}h{m:00.0}m";
+        }
+
+        private async Task AutoCapture() {
+            if (!EquipmentReady()) return;
+            var info = telescopeMediator.GetInfo();
+            if (info.AtPark) { Status = "Mount is parked. Unpark first."; return; }
+            if (!info.TrackingEnabled) { Status = "Turn mount tracking on first."; return; }
+
+            if (frames.Count > 0 || axis != null) Reset();
+
+            var astro = profileService.ActiveProfile.AstrometrySettings;
+            var pos = telescopeMediator.GetCurrentPosition().Transform(Epoch.JNOW);
+            if (!SlewPlanner.Plan(pos.RADegrees, pos.Dec, astro.Latitude, astro.Longitude, DateTime.UtcNow,
+                                  AutoStepDeg, MinAltDeg, MaxAltDeg, out var plan, out var reason)) {
+                Status = "Auto capture not safe here: " + reason;
+                Instructions = "No slew was made. Change the mount Dec (e.g. nearer the celestial equator) or adjust the altitude limits, then try again.";
+                return;
+            }
+
+            cts = new CancellationTokenSource();
+            var ct = cts.Token;
+            IsBusy = true;
+            autoRunning = true;
+            try {
+                string side = plan.HaSign > 0 ? "west" : "east";
+                string path = (plan.NeedsReposition ? RaText(pos.RADegrees) + " > " + RaText(plan.StartRaDeg) + " (safe start) > " : "") +
+                              (plan.NeedsReposition ? "" : RaText(pos.RADegrees) + " > ") + RaText(plan.RaDeg[0]) + " > " + RaText(plan.RaDeg[1]);
+                ConfirmText = "WARNING: the mount will slew in RA only (Dec " + pos.Dec.ToString("0.0", CultureInfo.InvariantCulture) + "° unchanged), staying on the " + side + " side of the meridian: " +
+                              path + ". Altitude stays " + plan.MinAltSeen.ToString("0") + "-" + plan.MaxAltSeen.ToString("0") + "°. " +
+                              (plan.NeedsReposition ? "The current position is not safe for the capture sequence, so it will first move to the safe start. " : "") +
+                              "Check that cables, scope and pier are clear. SLEW to proceed, CANCEL to stop with no movement.";
+                Status = "Waiting for your confirmation before any slew.";
+                ConfirmPending = true;
+                bool ok = await WaitForConfirm(ct);
+                ConfirmPending = false;
+                if (!ok) { Status = "Cancelled. The mount was not moved."; return; }
+
+                var pier = telescopeMediator.GetInfo().SideOfPier;
+
+                if (plan.NeedsReposition) {
+                    if (!SlewPlanner.Check(plan.StartRaDeg, plan.DecDeg, astro.Latitude, astro.Longitude, DateTime.UtcNow,
+                                           plan.HaSign, MinAltDeg, MaxAltDeg, out var why0, out _, out _)) {
+                        Status = "Stopped before moving to the safe start: " + why0 + ".";
+                        return;
+                    }
+                    Status = $"Moving to safe start RA {RaText(plan.StartRaDeg)}...";
+                    var start = new Coordinates(Angle.ByDegree(plan.StartRaDeg), Angle.ByDegree(plan.DecDeg), Epoch.JNOW);
+                    if (!await telescopeMediator.SlewToCoordinatesAsync(start, ct)) { Status = "Slew did not complete."; return; }
+                    if (!telescopeMediator.GetInfo().SideOfPier.Equals(pier)) {
+                        Status = "Pier side changed during the slew. Stopped. Check the mount and Reset.";
+                        return;
+                    }
+                    Status = "Settling...";
+                    await Task.Delay(3000, ct);
+                }
+
+                if (!await CaptureCore(ct)) return;
+
+                for (int k = 0; k < 2; k++) {
+                    // Re-verify right before each slew with the current clock.
+                    if (!SlewPlanner.Check(plan.RaDeg[k], plan.DecDeg, astro.Latitude, astro.Longitude, DateTime.UtcNow,
+                                           plan.HaSign, MinAltDeg, MaxAltDeg, out var why, out _, out _)) {
+                        Status = "Stopped before slew " + (k + 1) + ": " + why + ".";
+                        return;
+                    }
+                    Status = $"Slewing RA to {RaText(plan.RaDeg[k])} (move {k + 1} of 2)...";
+                    var target = new Coordinates(Angle.ByDegree(plan.RaDeg[k]), Angle.ByDegree(plan.DecDeg), Epoch.JNOW);
+                    bool done = await telescopeMediator.SlewToCoordinatesAsync(target, ct);
+                    if (!done) { Status = "Slew did not complete."; return; }
+                    if (!telescopeMediator.GetInfo().SideOfPier.Equals(pier)) {
+                        Status = "Pier side changed during the slew. Stopped. Check the mount and Reset.";
+                        return;
+                    }
+                    Status = "Settling...";
+                    await Task.Delay(3000, ct);
+                    if (!await CaptureCore(ct)) return;
+                }
+            } catch (OperationCanceledException) {
+                try { telescopeMediator.StopSlew(); } catch { }
+                Status = "Cancelled. Mount slew stopped.";
+            } catch (Exception ex) {
+                try { telescopeMediator.StopSlew(); } catch { }
+                Status = FriendlyError(ex);
+            } finally {
+                ConfirmPending = false;
+                autoRunning = false;
                 IsBusy = false;
             }
         }
@@ -263,12 +455,32 @@ namespace PolarAlignLive {
             var ct = cts.Token;
             IsBusy = true;
             Instructions = "Adjust altitude/azimuth. Dot = where your RA axis points; bullseye = pole.";
+            Task<IExposureData> pending = null;
             try {
-                var solver = BuildSolver(false, out var parameter, out var seq);
+                var solver = BuildSolver(false, out var parameter, out _);
+                var imageSolver = solver.ImageSolver;
+                var progress = new Progress<ApplicationStatus>();
                 int misses = 0;
+
+                // Pipeline: the next exposure starts as soon as the previous frame has downloaded,
+                // so exposure + download of frame N+1 overlaps with the plate solve of frame N.
+                // Exp / Gain / Bin / Crop are re-read for every new exposure.
+                short pendingBin = Binning;
+                pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, "");
+
                 while (!ct.IsCancellationRequested) {
+                    Status = "Exposing...";
+                    var exposure = await pending;
+                    short solveBin = pendingBin;
+
+                    pendingBin = Binning;
+                    pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, "");
+
                     Status = "Solving...";
-                    var result = await SolveOnce(solver, parameter, seq, ct);
+                    var imageData = await exposure.ToImageData(progress, ct);
+                    parameter.Binning = solveBin;
+                    parameter.Coordinates = telescopeMediator.GetCurrentPosition();
+                    var result = await imageSolver.Solve(imageData, parameter, progress, ct);
                     if (result == null || !result.Success || result.Coordinates == null) {
                         misses++;
                         Status = $"Solve failed ({misses}). Retrying...";
@@ -296,16 +508,21 @@ namespace PolarAlignLive {
                     Status = "Live  (" + DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + ")";
                 }
             } catch (OperationCanceledException) {
+                try { cameraMediator.AbortExposure(); } catch { }
                 Status = "Stopped.";
             } catch (Exception ex) {
+                try { cameraMediator.AbortExposure(); } catch { }
                 Status = FriendlyError(ex);
             } finally {
+                // Observe any exception from the abandoned exposure so it is not reported as unobserved.
+                if (pending != null) _ = pending.ContinueWith(t => { var ignored = t.Exception; }, TaskScheduler.Default);
                 IsBusy = false;
             }
         }
 
         private void Stop() {
             try { cts?.Cancel(); } catch { }
+            if (autoRunning) { try { telescopeMediator.StopSlew(); } catch { } }
         }
 
         private void Reset() {
