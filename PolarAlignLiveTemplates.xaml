@@ -4,20 +4,14 @@
                     xmlns:local="clr-namespace:PolarAlignLive"
                     xmlns:ui="clr-namespace:PolarAlignLive.UI">
 
-    <!-- Night palette: no white anywhere, everything dim red on black. -->
-    <SolidColorBrush x:Key="PalText" Color="#B01818" />
-    <SolidColorBrush x:Key="PalDim" Color="#6A1010" />
-    <SolidColorBrush x:Key="PalBorder" Color="#5A0E0E" />
-    <SolidColorBrush x:Key="PalFill" Color="#180000" />
-    <SolidColorBrush x:Key="PalFillHover" Color="#2A0000" />
-    <SolidColorBrush x:Key="PalFillPressed" Color="#3A0000" />
-    <SolidColorBrush x:Key="PalDisabledText" Color="#400A0A" />
-    <SolidColorBrush x:Key="PalDisabledBorder" Color="#2A0606" />
+    <!-- All colours come from NightTheme (bound through the VM's Theme property). No hard-coded light colours. -->
+
+    <BooleanToVisibilityConverter x:Key="PalBool" />
 
     <Style x:Key="PalButton" TargetType="Button">
-        <Setter Property="Foreground" Value="{StaticResource PalText}" />
-        <Setter Property="Background" Value="{StaticResource PalFill}" />
-        <Setter Property="BorderBrush" Value="{StaticResource PalBorder}" />
+        <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
+        <Setter Property="Background" Value="{Binding Theme.FillBrush}" />
+        <Setter Property="BorderBrush" Value="{Binding Theme.BorderBrushN}" />
         <Setter Property="BorderThickness" Value="1.5" />
         <Setter Property="Padding" Value="10,6" />
         <Setter Property="Margin" Value="3" />
@@ -31,18 +25,60 @@
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="3" Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                                          TextElement.Foreground="{TemplateBinding Foreground}">
+                            <ContentPresenter.Resources>
+                                <!-- NINA's implicit TextBlock style would otherwise force a light colour. -->
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground"
+                                            Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PalFillHover}" />
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="3" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PalFillPressed}" />
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.6" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource PalDisabledText}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource PalDisabledBorder}" />
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.35" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Segmented choice button (RadioButton) used for Night On/Off and Red/Green/White. -->
+    <Style x:Key="PalChoice" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
+        <Setter Property="Background" Value="{Binding Theme.FillBrush}" />
+        <Setter Property="BorderBrush" Value="{Binding Theme.BorderBrushN}" />
+        <Setter Property="Margin" Value="2" />
+        <Setter Property="MinWidth" Value="60" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1" CornerRadius="3" Padding="8,4" Opacity="0.7">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}">
+                            <ContentPresenter.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground"
+                                            Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="3" />
+                            <Setter TargetName="Bd" Property="Opacity" Value="1" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -51,13 +87,13 @@
     </Style>
 
     <Style x:Key="PalTextBox" TargetType="TextBox">
-        <Setter Property="Foreground" Value="{StaticResource PalText}" />
+        <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
         <Setter Property="Background" Value="Black" />
-        <Setter Property="BorderBrush" Value="{StaticResource PalBorder}" />
+        <Setter Property="BorderBrush" Value="{Binding Theme.BorderBrushN}" />
         <Setter Property="BorderThickness" Value="1.5" />
-        <Setter Property="CaretBrush" Value="{StaticResource PalText}" />
-        <Setter Property="SelectionBrush" Value="{StaticResource PalFillPressed}" />
-        <Setter Property="SelectionTextBrush" Value="{StaticResource PalText}" />
+        <Setter Property="CaretBrush" Value="{Binding Theme.TextBrush}" />
+        <Setter Property="SelectionBrush" Value="{Binding Theme.BorderBrushN}" />
+        <Setter Property="SelectionTextBrush" Value="Black" />
         <Setter Property="Padding" Value="3,2" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -76,13 +112,18 @@
     </Style>
 
     <Style x:Key="PalLabel" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource PalText}" />
+        <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
+    </Style>
+
+    <Style x:Key="PalDimLabel" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{Binding Theme.DimBrush}" />
     </Style>
 
     <!-- Key must be <VM full type name>_Dockable (NINA's pane template selector looks it up). -->
     <DataTemplate x:Key="PolarAlignLive.PolarAlignLiveVM_Dockable" DataType="{x:Type local:PolarAlignLiveVM}">
-        <Grid Background="Black" MinWidth="320" MinHeight="420">
+        <Grid Background="Black" MinWidth="320" MinHeight="550">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -91,12 +132,13 @@
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="8,6">
-                <TextBlock Text="{Binding Instructions}" Foreground="{StaticResource PalText}" TextWrapping="Wrap" FontSize="13" />
-                <TextBlock Text="{Binding FrameCountText}" Foreground="{StaticResource PalDim}" Margin="0,4,0,0" />
-                <TextBlock Text="{Binding AxisQualityText}" Foreground="{StaticResource PalDim}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Instructions}" Style="{StaticResource PalLabel}" TextWrapping="Wrap" FontSize="13" />
+                <TextBlock Text="{Binding FrameCountText}" Style="{StaticResource PalDimLabel}" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding AxisQualityText}" Style="{StaticResource PalDimLabel}" TextWrapping="Wrap" />
             </StackPanel>
 
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,0">
+            <StackPanel Grid.Row="1" Margin="8,0">
+            <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Exp (s)" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
                 <TextBox Width="50" Margin="4,0,12,0" Style="{StaticResource PalTextBox}" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" />
                 <TextBlock Text="Gain" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
@@ -104,23 +146,101 @@
                 <TextBlock Text="Bin" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
                 <TextBox Width="30" Margin="4,0,0,0" Style="{StaticResource PalTextBox}" Text="{Binding Binning, UpdateSourceTrigger=LostFocus}" />
             </StackPanel>
-
-            <ui:PolarDisplay Grid.Row="2" Margin="4" MinHeight="260"
-                             MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
-
-            <StackPanel Grid.Row="3" Margin="8,2">
-                <TextBlock Text="{Binding MoveUpText}" Foreground="{StaticResource PalText}" FontSize="18" FontWeight="Bold" />
-                <TextBlock Text="{Binding MoveEastText}" Foreground="{StaticResource PalText}" FontSize="18" FontWeight="Bold" />
-                <TextBlock Text="{Binding TotalErrorText}" Foreground="{StaticResource PalDim}" FontSize="14" />
-                <TextBlock Text="{Binding Status}" Foreground="{StaticResource PalDim}" FontSize="11" Margin="0,2,0,0" />
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="Auto: step°" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="36" Margin="4,0,10,0" Style="{StaticResource PalTextBox}" Text="{Binding AutoStepDeg, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="min alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="36" Margin="4,0,10,0" Style="{StaticResource PalTextBox}" Text="{Binding MinAltDeg, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Text="max alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
+                <TextBox Width="36" Margin="4,0,0,0" Style="{StaticResource PalTextBox}" Text="{Binding MaxAltDeg, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="Crop" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <RadioButton GroupName="PalCrop" Content="100%" Style="{StaticResource PalChoice}" MinWidth="44" IsChecked="{Binding Crop100, Mode=TwoWay}" />
+                <RadioButton GroupName="PalCrop" Content="50%" Style="{StaticResource PalChoice}" MinWidth="44" IsChecked="{Binding Crop50, Mode=TwoWay}" />
+                <RadioButton GroupName="PalCrop" Content="25%" Style="{StaticResource PalChoice}" MinWidth="44" IsChecked="{Binding Crop25, Mode=TwoWay}" />
+            </StackPanel>
             </StackPanel>
 
-            <WrapPanel Grid.Row="4" Margin="5,2,5,6">
-                <Button Style="{StaticResource PalButton}" Content="Capture Frame" Command="{Binding CaptureFrameCommand}" />
+            <!-- Night mode controls -->
+            <WrapPanel Grid.Row="2" Margin="6,6,6,0" VerticalAlignment="Center">
+                <TextBlock Text="Night" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="2,0,4,0" />
+                <RadioButton GroupName="PalNight" Content="On" Style="{StaticResource PalChoice}" MinWidth="40"
+                             IsChecked="{Binding Theme.NightOn, Mode=TwoWay}" />
+                <RadioButton GroupName="PalNight" Content="Off" Style="{StaticResource PalChoice}" MinWidth="40"
+                             IsChecked="{Binding Theme.NightOff, Mode=TwoWay}" />
+                <TextBlock Text="  " />
+                <RadioButton GroupName="PalColor" Content="Red" Style="{StaticResource PalChoice}" MinWidth="44"
+                             IsChecked="{Binding Theme.ColorRed, Mode=TwoWay}" />
+                <RadioButton GroupName="PalColor" Content="Green" Style="{StaticResource PalChoice}" MinWidth="44"
+                             IsChecked="{Binding Theme.ColorGreen, Mode=TwoWay}" />
+                <RadioButton GroupName="PalColor" Content="White" Style="{StaticResource PalChoice}" MinWidth="44"
+                             IsChecked="{Binding Theme.ColorWhite, Mode=TwoWay}" />
+                <Button Content="&#8722;" Style="{StaticResource PalButton}" MinWidth="30" Padding="6,2" Command="{Binding DimmerDownCommand}" />
+                <TextBlock Text="{Binding Theme.DimmerText}" Style="{StaticResource PalLabel}" VerticalAlignment="Center" MinWidth="34" TextAlignment="Center" />
+                <Button Content="+" Style="{StaticResource PalButton}" MinWidth="30" Padding="6,2" Command="{Binding DimmerUpCommand}" />
+            </WrapPanel>
+
+            <ui:PolarDisplay Grid.Row="3" Margin="4" MinHeight="240"
+                             Tint="{Binding Theme.TintColor}"
+                             MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
+
+            <StackPanel Grid.Row="4" Margin="8,2">
+                <Border Visibility="{Binding ConfirmPending, Converter={StaticResource PalBool}}"
+                        BorderBrush="{Binding Theme.TextBrush}" BorderThickness="3" CornerRadius="3" Padding="8" Margin="0,0,0,6"
+                        Background="{Binding Theme.FillBrush}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding ConfirmText}" Style="{StaticResource PalLabel}" TextWrapping="Wrap" FontWeight="Bold" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
+                            <Button Content="SLEW" Style="{StaticResource PalButton}" Command="{Binding ConfirmSlewCommand}" />
+                            <Button Content="CANCEL" Style="{StaticResource PalButton}" Command="{Binding CancelSlewCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalLabel}" FontSize="18" FontWeight="Bold" />
+                <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalLabel}" FontSize="18" FontWeight="Bold" />
+                <TextBlock Text="{Binding TotalErrorText}" Style="{StaticResource PalDimLabel}" FontSize="14" />
+                <TextBlock Text="{Binding Status}" Style="{StaticResource PalDimLabel}" FontSize="11" Margin="0,2,0,0" />
+            </StackPanel>
+
+            <WrapPanel Grid.Row="5" Margin="5,2,5,6">
+                <Button Style="{StaticResource PalButton}" Content="Capture Frame (manual)" Command="{Binding CaptureFrameCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Auto Capture (3 frames)" Command="{Binding AutoCaptureCommand}" />
+                <Button Style="{StaticResource PalButton}" Content="Tracking On" Command="{Binding TrackingOnCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Start Live" Command="{Binding StartLiveCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Stop" Command="{Binding StopCommand}" />
                 <Button Style="{StaticResource PalButton}" Content="Reset" Command="{Binding ResetCommand}" />
             </WrapPanel>
         </Grid>
+    </DataTemplate>
+
+    <!-- NINA Options page entry: key is "<plugin Name>_Options". Uses NINA's normal styling. -->
+    <DataTemplate x:Key="Polar Align Live_Options" DataType="{x:Type local:PolarAlignLivePlugin}">
+        <StackPanel Margin="0,6">
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Text="Night mode" Width="140" VerticalAlignment="Center" />
+                <RadioButton GroupName="OptNight" Content="On" Margin="0,0,16,0" VerticalAlignment="Center"
+                             IsChecked="{Binding Theme.NightOn, Mode=TwoWay}" />
+                <RadioButton GroupName="OptNight" Content="Off" VerticalAlignment="Center"
+                             IsChecked="{Binding Theme.NightOff, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Text="Night colour" Width="140" VerticalAlignment="Center" />
+                <RadioButton GroupName="OptColor" Content="Red" Margin="0,0,16,0" VerticalAlignment="Center"
+                             IsChecked="{Binding Theme.ColorRed, Mode=TwoWay}" />
+                <RadioButton GroupName="OptColor" Content="Green" Margin="0,0,16,0" VerticalAlignment="Center"
+                             IsChecked="{Binding Theme.ColorGreen, Mode=TwoWay}" />
+                <RadioButton GroupName="OptColor" Content="White" VerticalAlignment="Center"
+                             IsChecked="{Binding Theme.ColorWhite, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4">
+                <TextBlock Text="Brightness" Width="140" VerticalAlignment="Center" />
+                <Slider Width="200" Minimum="15" Maximum="100" SmallChange="5" LargeChange="10" VerticalAlignment="Center"
+                        Value="{Binding Theme.DimmerPercent, Mode=TwoWay}" />
+                <TextBlock Text="{Binding Theme.DimmerText}" Margin="10,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Opacity="0.7"
+                       Text="Night mode off = NINA's normal green and white. Applies to the Polar Align Live panel." />
+        </StackPanel>
     </DataTemplate>
 </ResourceDictionary>
