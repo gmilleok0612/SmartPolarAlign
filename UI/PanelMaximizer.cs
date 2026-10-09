@@ -105,6 +105,23 @@ namespace PolarAlignLive.UI {
             return false;
         }
 
+        /// <summary>True/false = whether NINA's dock currently shows this panel; null = panel not found in any dock layout.</summary>
+        public bool? PanelVisible(object content) {
+            try {
+                if (!Find(content, out var mine, out _, out _)) return null;
+                return Get(mine, "IsVisible") as bool?;
+            } catch { return null; }
+        }
+
+        /// <summary>Selects and activates this panel's tab (so one click on the top-bar icon brings it to the front).</summary>
+        public void Activate(object content) {
+            try {
+                if (!Find(content, out var mine, out _, out _)) return;
+                Set(mine, "IsSelected", true);
+                Set(mine, "IsActive", true);
+            } catch (Exception ex) { Logger.Info("PolarAlignLive activate failed: " + ex.Message); }
+        }
+
         private string Maximize(object content) {
             if (!Find(content, out var mine, out var all, out var diag)) {
                 Logger.Info("PolarAlignLive maximize: " + diag);
