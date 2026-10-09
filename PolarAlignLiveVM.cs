@@ -88,6 +88,7 @@ namespace PolarAlignLive {
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => maximizer.Activate(this)),
                         System.Windows.Threading.DispatcherPriority.Background);
             };
+            TrySetIcon();
             StartVisibilitySync();
             MaximizeCommand = new RelayCommand(() => {
                 Status = maximizer.Toggle(this);
@@ -108,24 +109,38 @@ namespace PolarAlignLive {
         public ICommand ToggleSettingsCommand { get; }
         public ICommand MaximizeCommand { get; }
 
+        private bool iconSet;
+
+        /// <summary>Replaces NINA's default puzzle-piece icon with ours once our resource dictionary is merged.</summary>
+        private void TrySetIcon() {
+            if (iconSet) return;
+            try {
+                if (System.Windows.Application.Current?.Resources["PolarAlignLiveSVG"] is System.Windows.Media.GeometryGroup g) {
+                    ImageGeometry = g;
+                    iconSet = true;
+                }
+            } catch { }
+        }
+
         /// <summary>After NINA loads its dock layout, make IsVisible match whether the panel is really shown.
         /// Without this a panel that is hidden but flagged visible needs two clicks on the top-bar icon.</summary>
         private void StartVisibilitySync() {
             var disp = System.Windows.Application.Current?.Dispatcher;
             if (disp == null) return;
             int tries = 0;
+            bool visibilitySynced = false;
             var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, disp) {
                 Interval = TimeSpan.FromSeconds(2)
             };
             timer.Tick += (s, e) => {
                 tries++;
+                TrySetIcon();
                 var shown = maximizer.PanelVisible(this);
-                if (shown.HasValue) {
+                if (shown.HasValue && !visibilitySynced) {
                     if (IsVisible != shown.Value) IsVisible = shown.Value;
-                    timer.Stop();
-                } else if (tries >= 8) {
-                    timer.Stop();
+                    visibilitySynced = true;
                 }
+                if ((visibilitySynced && iconSet) || tries >= 8) timer.Stop();
             };
             timer.Start();
         }
