@@ -12,6 +12,6 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyMetadata("MinimumApplicationVersion", "3.0.0.1")]
 [assembly: AssemblyMetadata("License", "MPL-2.0")]
 [assembly: AssemblyMetadata("LicenseURL", "https://www.mozilla.org/en-US/MPL/2.0/")]
-[assembly: AssemblyMetadata("Repository", "https://example.invalid/PolarAlignLive")]
+[assembly: AssemblyMetadata("Repository", "https://github.com/gmilleok0612/SmartPolarAlign")]
 [assembly: AssemblyMetadata("Tags", "Polar Alignment,Plate Solving,Mount")]
 [assembly: AssemblyMetadata("LongDescription", "Captures three plate-solved frames while you rotate RA, derives the mount RA axis direction, then solves continuously and shows live up/down and east/west arrows to bring the axis onto the celestial pole.")]
