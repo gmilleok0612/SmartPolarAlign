@@ -121,7 +121,10 @@
 
     <!-- Key must be <VM full type name>_Dockable (NINA's pane template selector looks it up). -->
     <DataTemplate x:Key="PolarAlignLive.PolarAlignLiveVM_Dockable" DataType="{x:Type local:PolarAlignLiveVM}">
-        <Grid Background="Black" MinWidth="320" MinHeight="550">
+        <!-- Whole panel is laid out at a fixed design size and scaled uniformly to the window. -->
+        <Border Background="Black">
+        <Viewbox Stretch="Uniform" StretchDirection="Both" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Grid Background="Black" Width="380" Height="720">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -132,12 +135,14 @@
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="8,6">
+                <Button Content="{Binding SettingsToggleText}" Command="{Binding ToggleSettingsCommand}"
+                        Style="{StaticResource PalButton}" HorizontalAlignment="Right" MinWidth="90" Padding="8,2" Margin="0,0,0,4" />
                 <TextBlock Text="{Binding Instructions}" Style="{StaticResource PalLabel}" TextWrapping="Wrap" FontSize="13" />
                 <TextBlock Text="{Binding FrameCountText}" Style="{StaticResource PalDimLabel}" Margin="0,4,0,0" />
                 <TextBlock Text="{Binding AxisQualityText}" Style="{StaticResource PalDimLabel}" TextWrapping="Wrap" />
             </StackPanel>
 
-            <StackPanel Grid.Row="1" Margin="8,0">
+            <StackPanel Grid.Row="1" Margin="8,0" Visibility="{Binding SettingsOpen, Converter={StaticResource PalBool}}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Exp (s)" Style="{StaticResource PalLabel}" VerticalAlignment="Center" />
                 <TextBox Width="50" Margin="4,0,12,0" Style="{StaticResource PalTextBox}" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" />
@@ -163,7 +168,7 @@
             </StackPanel>
 
             <!-- Night mode controls -->
-            <WrapPanel Grid.Row="2" Margin="6,6,6,0" VerticalAlignment="Center">
+            <WrapPanel Grid.Row="2" Margin="6,6,6,0" VerticalAlignment="Center" Visibility="{Binding SettingsOpen, Converter={StaticResource PalBool}}">
                 <TextBlock Text="Night" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="2,0,4,0" />
                 <RadioButton GroupName="PalNight" Content="On" Style="{StaticResource PalChoice}" MinWidth="40"
                              IsChecked="{Binding Theme.NightOn, Mode=TwoWay}" />
@@ -181,7 +186,7 @@
                 <Button Content="+" Style="{StaticResource PalButton}" MinWidth="30" Padding="6,2" Command="{Binding DimmerUpCommand}" />
             </WrapPanel>
 
-            <ui:PolarDisplay Grid.Row="3" Margin="4" MinHeight="240"
+            <ui:PolarDisplay Grid.Row="3" Margin="4" MinHeight="60" MinWidth="60"
                              Tint="{Binding Theme.TintColor}"
                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
 
@@ -212,6 +217,8 @@
                 <Button Style="{StaticResource PalButton}" Content="Reset" Command="{Binding ResetCommand}" />
             </WrapPanel>
         </Grid>
+        </Viewbox>
+        </Border>
     </DataTemplate>
 
     <!-- NINA Options page entry: key is "<plugin Name>_Options". Uses NINA's normal styling. -->
