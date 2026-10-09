@@ -66,13 +66,21 @@ namespace PolarAlignLive {
             gain = -1;
             binning = Math.Max((short)1, profileService.ActiveProfile.PlateSolveSettings.Binning);
             status = "Idle";
-            instructions = "Point anywhere with a plate-solvable field. Capture frame 1.";
+            instructions = "Point at a plate-solvable field, then press Auto Capture (mount moves itself) or Capture Frame (you move it).";
 
             CaptureFrameCommand = new AsyncRelayCommand(CaptureFrame, () => !IsBusy && axis == null && frames.Count < 3);
             StartLiveCommand = new AsyncRelayCommand(StartLive, () => !IsBusy && axis != null);
             StopCommand = new RelayCommand(Stop, () => IsBusy);
             ResetCommand = new RelayCommand(Reset, () => !IsBusy);
             AutoCaptureCommand = new AsyncRelayCommand(AutoCapture, () => !IsBusy && axis == null);
+            TrackingOnCommand = new RelayCommand(() => {
+                try {
+                    if (!telescopeMediator.GetInfo().Connected) { Status = "Connect the mount first (Equipment tab)."; return; }
+                    bool ok = telescopeMediator.SetTrackingEnabled(true);
+                    Status = ok ? "Tracking turned on." : "The mount did not accept the tracking command. Turn tracking on at the mount.";
+                } catch (Exception ex) { Status = FriendlyError(ex); }
+            });
+            ToggleSettingsCommand = new RelayCommand(() => SettingsOpen = !SettingsOpen);
             ConfirmSlewCommand = new RelayCommand(() => confirmTcs?.TrySetResult(true));
             CancelSlewCommand = new RelayCommand(() => confirmTcs?.TrySetResult(false));
             DimmerUpCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(0.1));
@@ -84,6 +92,8 @@ namespace PolarAlignLive {
         public ICommand StopCommand { get; }
         public ICommand ResetCommand { get; }
         public ICommand AutoCaptureCommand { get; }
+        public ICommand TrackingOnCommand { get; }
+        public ICommand ToggleSettingsCommand { get; }
         public ICommand ConfirmSlewCommand { get; }
         public ICommand CancelSlewCommand { get; }
         public ICommand DimmerUpCommand { get; }
@@ -126,6 +136,7 @@ namespace PolarAlignLive {
                     else if (kv[0] == "minalt") minAltDeg = Math.Max(5, Math.Min(80, v));
                     else if (kv[0] == "maxalt") maxAltDeg = Math.Max(20, Math.Min(85, v));
                     else if (kv[0] == "crop") cropPercent = v == 50 ? 50 : v == 25 ? 25 : 100;
+                    else if (kv[0] == "settings") settingsOpen = v == 1;
                 }
             } catch { }
         }
@@ -136,7 +147,8 @@ namespace PolarAlignLive {
                     "step=" + autoStepDeg.ToString(CultureInfo.InvariantCulture),
                     "minalt=" + minAltDeg.ToString(CultureInfo.InvariantCulture),
                     "maxalt=" + maxAltDeg.ToString(CultureInfo.InvariantCulture),
-                    "crop=" + cropPercent.ToString(CultureInfo.InvariantCulture) });
+                    "crop=" + cropPercent.ToString(CultureInfo.InvariantCulture),
+                    "settings=" + (settingsOpen ? "1" : "0") });
             } catch { }
         }
 
@@ -146,6 +158,11 @@ namespace PolarAlignLive {
         public bool Crop100 { get => cropPercent == 100; set { if (value) CropPercent = 100; } }
         public bool Crop50 { get => cropPercent == 50; set { if (value) CropPercent = 50; } }
         public bool Crop25 { get => cropPercent == 25; set { if (value) CropPercent = 25; } }
+
+        private bool settingsOpen;
+        /// <summary>Shows/hides the Exp/Gain/Bin, Auto, Crop and Night rows so the bullseye can use the space.</summary>
+        public bool SettingsOpen { get => settingsOpen; set { settingsOpen = value; RaisePropertyChanged(); RaisePropertyChanged(nameof(SettingsToggleText)); SaveAutoSettings(); } }
+        public string SettingsToggleText => settingsOpen ? "Settings \u25B4" : "Settings \u25BE";
 
         private bool confirmPending;
         public bool ConfirmPending { get => confirmPending; private set { confirmPending = value; RaisePropertyChanged(); } }
@@ -331,7 +348,7 @@ namespace PolarAlignLive {
 
             if (frames.Count < 3) {
                 Status = $"Frame {frames.Count} solved.";
-                Instructions = "Rotate the mount in RA only (>= ~20°, more is better; do not touch Dec), then capture the next frame.";
+                Instructions = "Rotate the mount in RA only (>= ~20°, do not touch Dec), then press Capture Frame (manual). Or press Reset and use Auto Capture to let the mount move itself.";
                 return true;
             }
 
@@ -364,7 +381,7 @@ namespace PolarAlignLive {
             if (!EquipmentReady()) return;
             var info = telescopeMediator.GetInfo();
             if (info.AtPark) { Status = "Mount is parked. Unpark first."; return; }
-            if (!info.TrackingEnabled) { Status = "Turn mount tracking on first."; return; }
+            bool trackingWasOff = !info.TrackingEnabled;
 
             if (frames.Count > 0 || axis != null) Reset();
 
@@ -388,12 +405,23 @@ namespace PolarAlignLive {
                 ConfirmText = "WARNING: the mount will slew in RA only (Dec " + pos.Dec.ToString("0.0", CultureInfo.InvariantCulture) + "° unchanged), staying on the " + side + " side of the meridian: " +
                               path + ". Altitude stays " + plan.MinAltSeen.ToString("0") + "-" + plan.MaxAltSeen.ToString("0") + "°. " +
                               (plan.NeedsReposition ? "The current position is not safe for the capture sequence, so it will first move to the safe start. " : "") +
+                              (trackingWasOff ? "Mount tracking is off and will be switched ON first. " : "") +
                               "Check that cables, scope and pier are clear. SLEW to proceed, CANCEL to stop with no movement.";
                 Status = "Waiting for your confirmation before any slew.";
                 ConfirmPending = true;
                 bool ok = await WaitForConfirm(ct);
                 ConfirmPending = false;
                 if (!ok) { Status = "Cancelled. The mount was not moved."; return; }
+
+                if (trackingWasOff) {
+                    Status = "Turning mount tracking on...";
+                    bool on = telescopeMediator.SetTrackingEnabled(true);
+                    await Task.Delay(1500, ct);
+                    if (!on || !telescopeMediator.GetInfo().TrackingEnabled) {
+                        Status = "Could not turn tracking on. Enable it on the mount, then try again. The mount was not moved.";
+                        return;
+                    }
+                }
 
                 var pier = telescopeMediator.GetInfo().SideOfPier;
 
@@ -534,7 +562,7 @@ namespace PolarAlignLive {
             FrameCountText = "Frames: 0 / 3";
             AxisQualityText = "";
             Status = "Idle";
-            Instructions = "Point anywhere with a plate-solvable field. Capture frame 1.";
+            Instructions = "Point at a plate-solvable field, then press Auto Capture (mount moves itself) or Capture Frame (you move it).";
             NotifyCommands();
         }
     }
