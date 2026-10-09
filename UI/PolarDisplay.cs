@@ -61,9 +61,9 @@ namespace PolarAlignLive.UI {
             double range = NiceCeil(Math.Max(2.0, err * 1.3));
             double pxPerArcmin = rMax / range;
 
-            // Rings at 1/4, 1/2, 1 of range, plus the bullseye.
+            // Rings at 1/3, 2/3 and 3/3 of range, plus the bullseye.
             for (int i = 1; i <= 3; i++) {
-                double r = rMax * i / 3.0 * 1.0;
+                double r = rMax * i / 3.0;
                 dc.DrawEllipse(null, RingPen, c, r, r);
                 Label(dc, Fmt(range * i / 3.0), new Point(c.X + r * 0.71 + 4, c.Y - r * 0.71 - 12), 11, DimRed);
             }
