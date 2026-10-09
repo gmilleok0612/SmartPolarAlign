@@ -45,6 +45,7 @@ namespace PolarAlignLive.UI {
             if (w < 20 || h < 20) return;
             var c = new Point(w / 2, h / 2);
             double rMax = Math.Min(w, h) / 2 - 28;
+            if (rMax < 12) rMax = Math.Max(6, Math.Min(w, h) / 2 - 4);   // very small window: drop the label margin
 
             var tint = Tint;
             Brush Red = new SolidColorBrush(tint);

@@ -121,7 +121,7 @@
 
     <!-- Key must be <VM full type name>_Dockable (NINA's pane template selector looks it up). -->
     <DataTemplate x:Key="PolarAlignLive.PolarAlignLiveVM_Dockable" DataType="{x:Type local:PolarAlignLiveVM}">
-        <Grid Background="Black" MinWidth="320" MinHeight="550">
+        <Grid Background="Black">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -181,7 +181,7 @@
                 <Button Content="+" Style="{StaticResource PalButton}" MinWidth="30" Padding="6,2" Command="{Binding DimmerUpCommand}" />
             </WrapPanel>
 
-            <ui:PolarDisplay Grid.Row="3" Margin="4" MinHeight="240"
+            <ui:PolarDisplay Grid.Row="3" Margin="4" MinHeight="60" MinWidth="60"
                              Tint="{Binding Theme.TintColor}"
                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
 
