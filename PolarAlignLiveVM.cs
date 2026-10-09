@@ -81,6 +81,14 @@ namespace PolarAlignLive {
                 } catch (Exception ex) { Status = FriendlyError(ex); }
             });
             ToggleSettingsCommand = new RelayCommand(() => SettingsOpen = !SettingsOpen);
+            // One-click open from the top-bar icon: NINA's icon toggles IsVisible, so keep it in step with what the
+            // dock really shows, and bring the tab to the front whenever the panel becomes visible.
+            PropertyChanged += (s, e) => {
+                if (e.PropertyName == nameof(IsVisible) && IsVisible)
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => maximizer.Activate(this)),
+                        System.Windows.Threading.DispatcherPriority.Background);
+            };
+            StartVisibilitySync();
             MaximizeCommand = new RelayCommand(() => {
                 Status = maximizer.Toggle(this);
                 RaisePropertyChanged(nameof(MaximizeText));
@@ -99,6 +107,28 @@ namespace PolarAlignLive {
         public ICommand TrackingOnCommand { get; }
         public ICommand ToggleSettingsCommand { get; }
         public ICommand MaximizeCommand { get; }
+
+        /// <summary>After NINA loads its dock layout, make IsVisible match whether the panel is really shown.
+        /// Without this a panel that is hidden but flagged visible needs two clicks on the top-bar icon.</summary>
+        private void StartVisibilitySync() {
+            var disp = System.Windows.Application.Current?.Dispatcher;
+            if (disp == null) return;
+            int tries = 0;
+            var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, disp) {
+                Interval = TimeSpan.FromSeconds(2)
+            };
+            timer.Tick += (s, e) => {
+                tries++;
+                var shown = maximizer.PanelVisible(this);
+                if (shown.HasValue) {
+                    if (IsVisible != shown.Value) IsVisible = shown.Value;
+                    timer.Stop();
+                } else if (tries >= 8) {
+                    timer.Stop();
+                }
+            };
+            timer.Start();
+        }
         private readonly PolarAlignLive.UI.PanelMaximizer maximizer = new PolarAlignLive.UI.PanelMaximizer();
         public string MaximizeText => maximizer.IsMaximized ? "Restore" : "Maximize";
         public ICommand ConfirmSlewCommand { get; }
