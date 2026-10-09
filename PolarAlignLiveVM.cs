@@ -109,6 +109,17 @@ namespace PolarAlignLive {
         public ICommand ToggleSettingsCommand { get; }
         public ICommand MaximizeCommand { get; }
 
+        /// <summary>NINA's top-bar icon calls this to toggle IsVisible. The flag can disagree with what the dock really
+        /// shows (it starts true even when the panel is hidden), which made the first click do nothing visible.
+        /// So at click time, first make the flag match the dock, then toggle.</summary>
+        public override void Hide(object o) {
+            try {
+                var shown = maximizer.PanelVisible(this);
+                if (shown.HasValue && IsVisible != shown.Value) IsVisible = shown.Value;
+            } catch { }
+            base.Hide(o);
+        }
+
         private bool iconSet;
 
         /// <summary>Replaces NINA's default puzzle-piece icon with ours once our resource dictionary is merged.</summary>
