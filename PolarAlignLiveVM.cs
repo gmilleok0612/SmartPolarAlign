@@ -81,6 +81,10 @@ namespace PolarAlignLive {
                 } catch (Exception ex) { Status = FriendlyError(ex); }
             });
             ToggleSettingsCommand = new RelayCommand(() => SettingsOpen = !SettingsOpen);
+            MaximizeCommand = new RelayCommand(() => {
+                Status = maximizer.Toggle(this);
+                RaisePropertyChanged(nameof(MaximizeText));
+            });
             ConfirmSlewCommand = new RelayCommand(() => confirmTcs?.TrySetResult(true));
             CancelSlewCommand = new RelayCommand(() => confirmTcs?.TrySetResult(false));
             DimmerUpCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(0.1));
@@ -94,6 +98,9 @@ namespace PolarAlignLive {
         public ICommand AutoCaptureCommand { get; }
         public ICommand TrackingOnCommand { get; }
         public ICommand ToggleSettingsCommand { get; }
+        public ICommand MaximizeCommand { get; }
+        private readonly PolarAlignLive.UI.PanelMaximizer maximizer = new PolarAlignLive.UI.PanelMaximizer();
+        public string MaximizeText => maximizer.IsMaximized ? "Restore" : "Maximize";
         public ICommand ConfirmSlewCommand { get; }
         public ICommand CancelSlewCommand { get; }
         public ICommand DimmerUpCommand { get; }
