@@ -62,31 +62,54 @@ namespace PolarAlignLive.UI {
             }
         }
 
+        private static IEnumerable<object> Descend(object root) {
+            var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
+            var stack = new Stack<object>();
+            stack.Push(root);
+            while (stack.Count > 0) {
+                var e = stack.Pop();
+                if (e == null || !seen.Add(e)) continue;
+                yield return e;
+                foreach (var name in new[] { "Children", "FloatingWindows", "RootPanel", "TopSide", "RightSide", "LeftSide", "BottomSide" }) {
+                    object v;
+                    try { v = Get(e, name); } catch { continue; }
+                    if (v == null) continue;
+                    if (v is IEnumerable en && !(v is string)) { foreach (var c in en) if (c != null) stack.Push(c); }
+                    else if (name != "Children") stack.Push(v);
+                }
+            }
+        }
+
         /// <summary>Finds the AvalonDock DockingManager whose layout holds an anchorable showing <paramref name="content"/>.</summary>
-        private static bool Find(object content, out object anchorable, out List<object> allAnchorables) {
+        private static bool Find(object content, out object anchorable, out List<object> allAnchorables, out string diag) {
             anchorable = null;
             allAnchorables = new List<object>();
+            int managers = 0, seenAnchorables = 0;
+            var titles = new List<string>();
+            string myTitle = Get(content, "Title") as string;
             foreach (Window w in Application.Current.Windows) {
                 foreach (var d in Walk(w)) {
                     if (d.GetType().FullName != "AvalonDock.DockingManager") continue;
+                    managers++;
                     var layout = Get(d, "Layout");
                     if (layout == null) continue;
-                    var all = new List<object>();
-                    var m = layout.GetType().GetMethod("Descendents", BindingFlags.Public | BindingFlags.Instance);
-                    if (m == null) continue;
-                    foreach (var e in (IEnumerable)m.Invoke(layout, null)) {
-                        if (e.GetType().Name == "LayoutAnchorable") all.Add(e);
-                    }
-                    var mine = all.FirstOrDefault(a => ReferenceEquals(Get(a, "Content"), content));
-                    if (mine != null) { anchorable = mine; allAnchorables = all; return true; }
+                    var all = Descend(layout).Where(e => e.GetType().Name == "LayoutAnchorable").ToList();
+                    seenAnchorables += all.Count;
+                    foreach (var a in all) titles.Add((Get(a, "Title") as string) ?? "?");
+                    var mine = all.FirstOrDefault(a => ReferenceEquals(Get(a, "Content"), content))
+                               ?? all.FirstOrDefault(a => myTitle != null && (Get(a, "Title") as string) == myTitle);
+                    if (mine != null) { anchorable = mine; allAnchorables = all; diag = null; return true; }
                 }
             }
+            diag = $"dock managers: {managers}, panels seen: {seenAnchorables} [{string.Join(", ", titles.Take(12))}], looking for '{myTitle}'";
             return false;
         }
 
         private string Maximize(object content) {
-            if (!Find(content, out var mine, out var all))
-                return "Maximize: could not find this panel in NINA's dock (is it docked/visible?).";
+            if (!Find(content, out var mine, out var all, out var diag)) {
+                Logger.Info("PolarAlignLive maximize: " + diag);
+                return "Maximize: could not find this panel in NINA's dock. " + diag;
+            }
 
             ours = mine;
             hidden.Clear(); wasSelected.Clear(); sizes.Clear();

@@ -128,71 +128,72 @@
                 Height="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
         <DockPanel LastChildFill="True" Background="Black">
 
-            <!-- Top strip: outside the square; every row stretches across the full width. -->
+            <!-- Top strip: fixed-size controls that flow left to right and wrap as the window narrows. -->
             <StackPanel DockPanel.Dock="Top" Margin="6,4,6,2">
-                <UniformGrid Columns="2" Rows="1">
+                <WrapPanel Orientation="Horizontal">
                     <Button Content="{Binding MaximizeText}" Command="{Binding MaximizeCommand}"
-                            Style="{StaticResource PalButton}" MinWidth="0" FontSize="14" Padding="8,3" />
+                            Style="{StaticResource PalButton}" MinWidth="0" Width="110" FontSize="14" Padding="8,3" />
                     <Button Content="{Binding SettingsToggleText}" Command="{Binding ToggleSettingsCommand}"
-                            Style="{StaticResource PalButton}" MinWidth="0" FontSize="14" Padding="8,3" />
-                </UniformGrid>
+                            Style="{StaticResource PalButton}" MinWidth="0" Width="110" FontSize="14" Padding="8,3" />
+                </WrapPanel>
 
-                <StackPanel Margin="3,2,3,0" Visibility="{Binding SettingsOpen, Converter={StaticResource PalBool}}">
-                    <UniformGrid Columns="3" Rows="1" Margin="0,2,0,0">
-                        <DockPanel Margin="0,0,8,0"><TextBlock DockPanel.Dock="Left" Text="Exp (s)" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBox Style="{StaticResource PalTextBox}" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" /></DockPanel>
-                        <DockPanel Margin="0,0,8,0"><TextBlock DockPanel.Dock="Left" Text="Gain" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBox Style="{StaticResource PalTextBox}" Text="{Binding Gain, UpdateSourceTrigger=LostFocus}" /></DockPanel>
-                        <DockPanel><TextBlock DockPanel.Dock="Left" Text="Bin" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBox Style="{StaticResource PalTextBox}" Text="{Binding Binning, UpdateSourceTrigger=LostFocus}" /></DockPanel>
-                    </UniformGrid>
-                    <UniformGrid Columns="3" Rows="1" Margin="0,4,0,0">
-                        <DockPanel Margin="0,0,8,0"><TextBlock DockPanel.Dock="Left" Text="Step°" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBox Style="{StaticResource PalTextBox}" Text="{Binding AutoStepDeg, UpdateSourceTrigger=LostFocus}" /></DockPanel>
-                        <DockPanel Margin="0,0,8,0"><TextBlock DockPanel.Dock="Left" Text="Min alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBox Style="{StaticResource PalTextBox}" Text="{Binding MinAltDeg, UpdateSourceTrigger=LostFocus}" /></DockPanel>
-                        <DockPanel><TextBlock DockPanel.Dock="Left" Text="Max alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBox Style="{StaticResource PalTextBox}" Text="{Binding MaxAltDeg, UpdateSourceTrigger=LostFocus}" /></DockPanel>
-                    </UniformGrid>
-                    <DockPanel Margin="0,4,0,0">
-                        <TextBlock DockPanel.Dock="Left" Text="Crop" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <UniformGrid Columns="3" Rows="1">
-                            <RadioButton GroupName="PalCrop" Content="100%" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Crop100, Mode=TwoWay}" />
-                            <RadioButton GroupName="PalCrop" Content="50%" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Crop50, Mode=TwoWay}" />
-                            <RadioButton GroupName="PalCrop" Content="25%" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Crop25, Mode=TwoWay}" />
-                        </UniformGrid>
-                    </DockPanel>
-                    <DockPanel Margin="0,4,0,0">
-                        <TextBlock DockPanel.Dock="Left" Text="Night" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <UniformGrid Columns="2" Rows="1">
-                            <RadioButton GroupName="PalNight" Content="On" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Theme.NightOn, Mode=TwoWay}" />
-                            <RadioButton GroupName="PalNight" Content="Off" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Theme.NightOff, Mode=TwoWay}" />
-                        </UniformGrid>
-                    </DockPanel>
-                    <UniformGrid Columns="3" Rows="1" Margin="0,2,0,0">
-                        <RadioButton GroupName="PalColor" Content="Red" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Theme.ColorRed, Mode=TwoWay}" />
-                        <RadioButton GroupName="PalColor" Content="Green" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Theme.ColorGreen, Mode=TwoWay}" />
-                        <RadioButton GroupName="PalColor" Content="White" Style="{StaticResource PalChoice}" MinWidth="0" IsChecked="{Binding Theme.ColorWhite, Mode=TwoWay}" />
-                    </UniformGrid>
-                    <Grid Margin="0,2,0,2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" MinWidth="60" /><ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button Grid.Column="0" Content="&#8722;" Style="{StaticResource PalButton}" MinWidth="0" Padding="6,2" Command="{Binding DimmerDownCommand}" />
-                        <TextBlock Grid.Column="1" Text="{Binding Theme.DimmerText}" Style="{StaticResource PalLabel}" VerticalAlignment="Center" TextAlignment="Center" Margin="6,0" />
-                        <Button Grid.Column="2" Content="+" Style="{StaticResource PalButton}" MinWidth="0" Padding="6,2" Command="{Binding DimmerUpCommand}" />
-                    </Grid>
-                </StackPanel>
+                <WrapPanel Orientation="Horizontal" Margin="0,2,0,0" Visibility="{Binding SettingsOpen, Converter={StaticResource PalBool}}">
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Exp (s)" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="52" Style="{StaticResource PalTextBox}" Text="{Binding ExposureTime, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Gain" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="52" Style="{StaticResource PalTextBox}" Text="{Binding Gain, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Bin" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="36" Style="{StaticResource PalTextBox}" Text="{Binding Binning, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Step°" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="40" Style="{StaticResource PalTextBox}" Text="{Binding AutoStepDeg, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Min alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="40" Style="{StaticResource PalTextBox}" Text="{Binding MinAltDeg, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Max alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="40" Style="{StaticResource PalTextBox}" Text="{Binding MaxAltDeg, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Crop" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <RadioButton GroupName="PalCrop" Content="100%" Style="{StaticResource PalChoice}" MinWidth="0" Width="56" IsChecked="{Binding Crop100, Mode=TwoWay}" />
+                        <RadioButton GroupName="PalCrop" Content="50%" Style="{StaticResource PalChoice}" MinWidth="0" Width="50" IsChecked="{Binding Crop50, Mode=TwoWay}" />
+                        <RadioButton GroupName="PalCrop" Content="25%" Style="{StaticResource PalChoice}" MinWidth="0" Width="50" IsChecked="{Binding Crop25, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Night" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <RadioButton GroupName="PalNight" Content="On" Style="{StaticResource PalChoice}" MinWidth="0" Width="46" IsChecked="{Binding Theme.NightOn, Mode=TwoWay}" />
+                        <RadioButton GroupName="PalNight" Content="Off" Style="{StaticResource PalChoice}" MinWidth="0" Width="46" IsChecked="{Binding Theme.NightOff, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <RadioButton GroupName="PalColor" Content="Red" Style="{StaticResource PalChoice}" MinWidth="0" Width="50" IsChecked="{Binding Theme.ColorRed, Mode=TwoWay}" />
+                        <RadioButton GroupName="PalColor" Content="Green" Style="{StaticResource PalChoice}" MinWidth="0" Width="58" IsChecked="{Binding Theme.ColorGreen, Mode=TwoWay}" />
+                        <RadioButton GroupName="PalColor" Content="White" Style="{StaticResource PalChoice}" MinWidth="0" Width="58" IsChecked="{Binding Theme.ColorWhite, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <Button Content="&#8722;" Style="{StaticResource PalButton}" MinWidth="0" Width="34" Padding="4,2" Command="{Binding DimmerDownCommand}" />
+                        <TextBlock Text="{Binding Theme.DimmerText}" Style="{StaticResource PalLabel}" VerticalAlignment="Center" TextAlignment="Center" Width="44" />
+                        <Button Content="+" Style="{StaticResource PalButton}" MinWidth="0" Width="34" Padding="4,2" Command="{Binding DimmerUpCommand}" />
+                    </StackPanel>
+                </WrapPanel>
             </StackPanel>
 
-            <UniformGrid DockPanel.Dock="Bottom" Height="84" Columns="3" Rows="2" Margin="5,2,5,6">
-                            <Button Style="{StaticResource PalButton}" MinWidth="0" FontSize="15" Content="Capture Frame" Command="{Binding CaptureFrameCommand}" />
-                            <Button Style="{StaticResource PalButton}" MinWidth="0" FontSize="15" Content="Auto Capture" Command="{Binding AutoCaptureCommand}" />
-                            <Button Style="{StaticResource PalButton}" MinWidth="0" FontSize="15" Content="Tracking On" Command="{Binding TrackingOnCommand}" />
-                            <Button Style="{StaticResource PalButton}" MinWidth="0" FontSize="15" Content="Start Live" Command="{Binding StartLiveCommand}" />
-                            <Button Style="{StaticResource PalButton}" MinWidth="0" FontSize="15" Content="Stop" Command="{Binding StopCommand}" />
-                            <Button Style="{StaticResource PalButton}" MinWidth="0" FontSize="15" Content="Reset" Command="{Binding ResetCommand}" />
-                        </UniformGrid>
+            <UniformGrid DockPanel.Dock="Bottom" Columns="3" Rows="2" HorizontalAlignment="Center" Margin="5,2,5,6">
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Capture Frame" Command="{Binding CaptureFrameCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Auto Capture" Command="{Binding AutoCaptureCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Tracking On" Command="{Binding TrackingOnCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Start Live" Command="{Binding StartLiveCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Stop" Command="{Binding StopCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Reset" Command="{Binding ResetCommand}" />
+            </UniformGrid>
 
             <!-- Largest square that fits, never smaller than 320; below that the panel scrolls. -->
             <ScrollViewer x:Name="SquareHost" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="Black">
