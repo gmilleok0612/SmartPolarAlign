@@ -208,14 +208,14 @@
                 <TextBlock Text="{Binding Status}" Style="{StaticResource PalDimLabel}" FontSize="11" Margin="0,2,0,0" />
             </StackPanel>
 
-            <WrapPanel Grid.Row="5" Margin="5,2,5,6">
-                <Button Style="{StaticResource PalButton}" Content="Capture Frame (manual)" Command="{Binding CaptureFrameCommand}" />
-                <Button Style="{StaticResource PalButton}" Content="Auto Capture (3 frames)" Command="{Binding AutoCaptureCommand}" />
-                <Button Style="{StaticResource PalButton}" Content="Tracking On" Command="{Binding TrackingOnCommand}" />
-                <Button Style="{StaticResource PalButton}" Content="Start Live" Command="{Binding StartLiveCommand}" />
-                <Button Style="{StaticResource PalButton}" Content="Stop" Command="{Binding StopCommand}" />
-                <Button Style="{StaticResource PalButton}" Content="Reset" Command="{Binding ResetCommand}" />
-            </WrapPanel>
+            <UniformGrid Grid.Row="5" Columns="3" Rows="2" Margin="5,2,5,6">
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Content="Capture Frame" Command="{Binding CaptureFrameCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Content="Auto Capture" Command="{Binding AutoCaptureCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Content="Tracking On" Command="{Binding TrackingOnCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Content="Start Live" Command="{Binding StartLiveCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Content="Stop" Command="{Binding StopCommand}" />
+                <Button Style="{StaticResource PalButton}" MinWidth="0" Content="Reset" Command="{Binding ResetCommand}" />
+            </UniformGrid>
         </Grid>
         </Viewbox>
         </Border>
