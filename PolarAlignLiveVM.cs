@@ -114,10 +114,23 @@ namespace PolarAlignLive {
         /// So at click time, first make the flag match the dock, then toggle.</summary>
         public override void Hide(object o) {
             try {
-                var shown = maximizer.PanelVisible(this);
-                if (shown.HasValue && IsVisible != shown.Value) IsVisible = shown.Value;
-            } catch { }
+                var found = maximizer.State(this, out var vis, out var sel);
+                NINA.Core.Utility.Logger.Info($"PolarAlignLive icon click: flag={IsVisible} found={found} dockVisible={vis} selected={sel}");
+                if (!found) {
+                    // Dock not reachable (lazy tab): force a hide->show cycle so the click always shows the panel.
+                    IsVisible = false; IsVisible = true;
+                    return;
+                }
+                if (vis && !sel) {
+                    // Open but buried behind another tab: bring it to the front instead of hiding it.
+                    IsVisible = true;
+                    maximizer.Activate(this);
+                    return;
+                }
+                if (IsVisible != vis) IsVisible = vis;
+            } catch (Exception ex) { NINA.Core.Utility.Logger.Info("PolarAlignLive Hide: " + ex.Message); }
             base.Hide(o);
+            NINA.Core.Utility.Logger.Info($"PolarAlignLive icon click done: flag={IsVisible}");
         }
 
         private bool iconSet;
