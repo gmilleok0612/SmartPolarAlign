@@ -9,6 +9,19 @@
     <BooleanToVisibilityConverter x:Key="PalBool" />
     <ui:SquareSizeConverter x:Key="PalSquare" Floor="320" />
 
+    <!-- Panel icon for NINA's top bar / tab (replaces the default puzzle piece). Filled shapes only. -->
+    <GeometryGroup x:Key="PolarAlignLiveSVG" FillRule="NonZero">
+        <PathGeometry Figures="M1.2,16 A14.8,14.8 0 1 1 30.8,16 A14.8,14.8 0 1 1 1.2,16 Z M3.8,16 A12.2,12.2 0 1 0 28.2,16 A12.2,12.2 0 1 0 3.8,16 Z" />
+        <PathGeometry Figures="M8,16 A8,8 0 1 1 24,16 A8,8 0 1 1 8,16 Z M10.6,16 A5.4,5.4 0 1 0 21.4,16 A5.4,5.4 0 1 0 10.6,16 Z" />
+        <PathGeometry Figures="M13.8,16 A2.2,2.2 0 1 1 18.2,16 A2.2,2.2 0 1 1 13.8,16 Z" />
+        <PathGeometry Figures="M15,1.2 L17,1.2 L17,14 L15,14 Z" />
+        <PathGeometry Figures="M15,18 L17,18 L17,30.8 L15,30.8 Z" />
+        <PathGeometry Figures="M1.2,15 L14,15 L14,17 L1.2,17 Z" />
+        <PathGeometry Figures="M18,15 L30.8,15 L30.8,17 L18,17 Z" />
+        <PathGeometry Figures="M21.837,9.50785 A1.9,1.9 0 1 1 25.637,9.50785 A1.9,1.9 0 1 1 21.837,9.50785 Z" />
+    </GeometryGroup>
+
+
     <Style x:Key="PalButton" TargetType="Button">
         <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
         <Setter Property="Background" Value="{Binding Theme.FillBrush}" />
