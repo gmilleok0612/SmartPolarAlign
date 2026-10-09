@@ -113,6 +113,17 @@ namespace PolarAlignLive.UI {
             } catch { return null; }
         }
 
+        /// <summary>found, IsVisible, IsSelected of this panel's anchorable.</summary>
+        public bool State(object content, out bool visible, out bool selected) {
+            visible = false; selected = false;
+            try {
+                if (!Find(content, out var mine, out _, out _)) return false;
+                visible = Get(mine, "IsVisible") as bool? ?? false;
+                selected = Get(mine, "IsSelected") as bool? ?? false;
+                return true;
+            } catch { return false; }
+        }
+
         /// <summary>Selects and activates this panel's tab (so one click on the top-bar icon brings it to the front).</summary>
         public void Activate(object content) {
             try {
