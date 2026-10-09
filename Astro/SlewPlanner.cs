@@ -8,7 +8,6 @@ namespace PolarAlignLive.Astro {
         public int HaSign;                       // +1 west of meridian, -1 east
         public double StartRaDeg;                // where frame 1 is taken (current RA, or a safe repositioned RA)
         public bool NeedsReposition;             // true if the mount must first slew (RA only) to StartRaDeg
-        public bool MovingAwayFromMeridian;
         public double MinAltSeen = 90, MaxAltSeen = -90;
     }
 
@@ -91,7 +90,7 @@ namespace PolarAlignLive.Astro {
             int away = haSign > 0 ? -1 : +1;
             string lastReason = null;
             foreach (int dir in new[] { away, -away }) {
-                var p = new SlewPlan { DecDeg = decDeg, HaSign = haSign, MovingAwayFromMeridian = dir == away, MinAltSeen = lo0, MaxAltSeen = hi0 };
+                var p = new SlewPlan { DecDeg = decDeg, HaSign = haSign, MinAltSeen = lo0, MaxAltSeen = hi0 };
                 bool ok = true;
                 for (int k = 1; k <= 2 && ok; k++) {
                     double ra = ra0Deg + dir * k * stepDeg;
