@@ -54,7 +54,36 @@ namespace PolarAlignLive.Astro {
         /// Plan the capture positions. If the current position can't host the three frames safely, find the nearest
         /// RA (same Dec, same side of the meridian) that can, and plan a repositioning slew to it first.
         /// </summary>
+        /// <summary>Smallest sky separation between frames that the plugin accepts is 8 deg; require margin.</summary>
+        public const double MinSkySepDeg = 10;
+
+        /// <summary>
+        /// Top-level planner. Near the pole an RA-only move barely moves the camera (sky motion = step * cos Dec), so the
+        /// three frames would be nearly identical. In that case (or if no RA-only plan is safe) the start position also
+        /// changes Dec to a usable value (the plan's DecDeg), reached by the confirmed "safe start" slew.
+        /// </summary>
         public static bool Plan(double ra0Deg, double decDeg, double latDeg, double lonEastDeg, DateTime utc,
+                                double stepDeg, double minAlt, double maxAlt, out SlewPlan plan, out string reason) {
+            bool enoughMotion = stepDeg * Math.Cos(decDeg * PolarMath.D2R) >= MinSkySepDeg;
+            string firstReason = null;
+            if (enoughMotion && PlanRaOnly(ra0Deg, decDeg, latDeg, lonEastDeg, utc, stepDeg, minAlt, maxAlt, out plan, out firstReason))
+                return true;
+            if (!enoughMotion) firstReason = "Dec " + decDeg.ToString("0") + "° is too close to the pole for RA-only moves";
+
+            foreach (double d in new[] { 30.0, 20.0, 40.0, 10.0, 50.0, 0.0 }) {
+                if (stepDeg * Math.Cos(d * PolarMath.D2R) < MinSkySepDeg) continue;
+                if (PlanRaOnly(ra0Deg, d, latDeg, lonEastDeg, utc, stepDeg, minAlt, maxAlt, out plan, out _)) {
+                    plan.NeedsReposition = true;   // Dec differs from the current position: always a confirmed safe-start slew
+                    reason = null;
+                    return true;
+                }
+            }
+            plan = null;
+            reason = firstReason ?? "no safe position found";
+            return false;
+        }
+
+        private static bool PlanRaOnly(double ra0Deg, double decDeg, double latDeg, double lonEastDeg, DateTime utc,
                                 double stepDeg, double minAlt, double maxAlt, out SlewPlan plan, out string reason) {
             plan = null;
             int haSign = Math.Sign(HourAngleDeg(ra0Deg, lonEastDeg, utc));
