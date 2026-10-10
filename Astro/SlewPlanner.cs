@@ -66,8 +66,12 @@ namespace PolarAlignLive.Astro {
                                 double stepDeg, double minAlt, double maxAlt, out SlewPlan plan, out string reason) {
             bool enoughMotion = stepDeg * Math.Cos(decDeg * PolarMath.D2R) >= MinSkySepDeg;
             string firstReason = null;
-            if (enoughMotion && PlanRaOnly(ra0Deg, decDeg, latDeg, lonEastDeg, utc, stepDeg, minAlt, maxAlt, out plan, out firstReason))
+            plan = null;
+            reason = null;
+            if (enoughMotion && PlanRaOnly(ra0Deg, decDeg, latDeg, lonEastDeg, utc, stepDeg, minAlt, maxAlt, out plan, out firstReason)) {
+                reason = null;
                 return true;
+            }
             if (!enoughMotion) firstReason = "Dec " + decDeg.ToString("0") + "° is too close to the pole for RA-only moves";
 
             foreach (double d in new[] { 30.0, 20.0, 40.0, 10.0, 50.0, 0.0 }) {
