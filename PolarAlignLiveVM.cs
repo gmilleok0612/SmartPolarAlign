@@ -480,9 +480,13 @@ namespace PolarAlignLive {
                 string side = plan.HaSign > 0 ? "west" : "east";
                 string path = (plan.NeedsReposition ? RaText(pos.RADegrees) + " > " + RaText(plan.StartRaDeg) + " (safe start) > " : "") +
                               (plan.NeedsReposition ? "" : RaText(pos.RADegrees) + " > ") + RaText(plan.RaDeg[0]) + " > " + RaText(plan.RaDeg[1]);
-                ConfirmText = "WARNING: the mount will slew in RA only (Dec " + pos.Dec.ToString("0.0", CultureInfo.InvariantCulture) + "° unchanged), staying on the " + side + " side of the meridian: " +
+                bool decMoves = Math.Abs(plan.DecDeg - pos.Dec) > 0.5;
+                string decPart = decMoves
+                    ? "the mount will FIRST move to a usable sky area (Dec " + pos.Dec.ToString("0", CultureInfo.InvariantCulture) + "° to " + plan.DecDeg.ToString("0", CultureInfo.InvariantCulture) + "°), then slew in RA only"
+                    : "the mount will slew in RA only (Dec " + pos.Dec.ToString("0.0", CultureInfo.InvariantCulture) + "° unchanged)";
+                ConfirmText = "WARNING: " + decPart + ", staying on the " + side + " side of the meridian: " +
                               path + ". Altitude stays " + plan.MinAltSeen.ToString("0") + "-" + plan.MaxAltSeen.ToString("0") + "°. " +
-                              (plan.NeedsReposition ? "The current position is not safe for the capture sequence, so it will first move to the safe start. " : "") +
+                              (plan.NeedsReposition ? "The current position is not suitable for the capture sequence, so it will first move to the safe start before any image is taken. " : "") +
                               (trackingWasOff ? "Mount tracking is off and will be switched ON first. " : "") +
                               "Check that cables, scope and pier are clear. SLEW to proceed, CANCEL to stop with no movement.";
                 Status = "Waiting for your confirmation before any slew.";
