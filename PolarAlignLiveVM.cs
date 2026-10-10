@@ -80,6 +80,7 @@ namespace PolarAlignLive {
                     Status = ok ? "Tracking turned on." : "The mount did not accept the tracking command. Turn tracking on at the mount.";
                 } catch (Exception ex) { Status = FriendlyError(ex); }
             });
+            AbortSlewCommand = new RelayCommand(AbortSlew);
             ToggleSettingsCommand = new RelayCommand(() => SettingsOpen = !SettingsOpen);
             // One-click open from the top-bar icon: NINA's icon toggles IsVisible, so keep it in step with what the
             // dock really shows, and bring the tab to the front whenever the panel becomes visible.
@@ -106,6 +107,7 @@ namespace PolarAlignLive {
         public ICommand ResetCommand { get; }
         public ICommand AutoCaptureCommand { get; }
         public ICommand TrackingOnCommand { get; }
+        public ICommand AbortSlewCommand { get; }
         public ICommand ToggleSettingsCommand { get; }
         public ICommand MaximizeCommand { get; }
 
@@ -622,6 +624,15 @@ namespace PolarAlignLive {
                 if (pending != null) _ = pending.ContinueWith(t => { var ignored = t.Exception; }, TaskScheduler.Default);
                 IsBusy = false;
             }
+        }
+
+        /// <summary>Always-enabled emergency stop: halts any mount slew right now (even one not started by this panel)
+        /// and cancels a running Auto Capture / Live run.</summary>
+        private void AbortSlew() {
+            try { telescopeMediator.StopSlew(); } catch (Exception ex) { NINA.Core.Utility.Logger.Info("PolarAlignLive abort slew: " + ex.Message); }
+            try { confirmTcs?.TrySetResult(false); } catch { }
+            try { cts?.Cancel(); } catch { }
+            Status = "SLEW ABORTED. Mount stop command sent.";
         }
 
         private void Stop() {
