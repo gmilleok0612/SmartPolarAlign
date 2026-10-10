@@ -182,6 +182,16 @@
                         <RadioButton GroupName="PalCrop" Content="25%" Style="{StaticResource PalChoice}" MinWidth="0" Width="50" IsChecked="{Binding Crop25, Mode=TwoWay}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <Button Content="{Binding AltUnitText}" Command="{Binding CycleAltUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" />
+                        <Button Content="{Binding AzUnitText}" Command="{Binding CycleAzUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
+                        <TextBlock Text="Turned" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="48" Style="{StaticResource PalTextBox}" Text="{Binding CalAmount, UpdateSourceTrigger=LostFocus}" />
+                        <Button Content="{Binding AltCalText}" Command="{Binding CalAltCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="110" Padding="4,2" />
+                        <Button Content="{Binding AzCalText}" Command="{Binding CalAzCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="110" Padding="4,2" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
                         <TextBlock Text="Night" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
                         <RadioButton GroupName="PalNight" Content="On" Style="{StaticResource PalChoice}" MinWidth="0" Width="46" IsChecked="{Binding Theme.NightOn, Mode=TwoWay}" />
                         <RadioButton GroupName="PalNight" Content="Off" Style="{StaticResource PalChoice}" MinWidth="0" Width="46" IsChecked="{Binding Theme.NightOff, Mode=TwoWay}" />
@@ -247,7 +257,25 @@
                                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
                             <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,0,0,0" IsHitTestVisible="False">
                                 <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalLabel}" FontSize="20" FontWeight="Bold" />
+                                <TextBlock Text="{Binding AltAdviceText}" FontSize="15" FontWeight="Bold" Foreground="{Binding Theme.TextBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                                 <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalLabel}" FontSize="20" FontWeight="Bold" />
+                                <TextBlock Text="{Binding AzAdviceText}" FontSize="15" FontWeight="Bold" Foreground="{Binding Theme.TextBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
                             <TextBlock Text="{Binding TotalErrorText}" Style="{StaticResource PalDimLabel}" FontSize="15"
                                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,4,0" IsHitTestVisible="False" />
