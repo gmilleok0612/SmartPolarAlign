@@ -199,6 +199,9 @@
                 </WrapPanel>
             </StackPanel>
 
+            <Button DockPanel.Dock="Bottom" Style="{StaticResource PalButton}" MinWidth="0" Width="408" Height="34" FontSize="14" FontWeight="Bold"
+                    HorizontalAlignment="Center" Margin="5,0,5,6" Content="ABORT SLEW" Command="{Binding AbortSlewCommand}" />
+
             <UniformGrid DockPanel.Dock="Bottom" Columns="3" Rows="2" HorizontalAlignment="Center" Margin="5,2,5,6">
                 <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Capture Frame" Command="{Binding CaptureFrameCommand}" />
                 <Button Style="{StaticResource PalButton}" MinWidth="0" Width="132" Height="38" FontSize="14" Content="Auto Capture" Command="{Binding AutoCaptureCommand}" />
