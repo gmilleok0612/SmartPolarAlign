@@ -186,10 +186,7 @@
                         <Button Content="{Binding AzUnitText}" Command="{Binding CycleAzUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
-                        <TextBlock Text="Turned" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                        <TextBox Width="48" Style="{StaticResource PalTextBox}" Text="{Binding CalAmount, UpdateSourceTrigger=LostFocus}" />
-                        <Button Content="{Binding AltCalText}" Command="{Binding CalAltCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="110" Padding="4,2" />
-                        <Button Content="{Binding AzCalText}" Command="{Binding CalAzCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="110" Padding="4,2" />
+                        <Button Content="Calibrate Adjustment Knobs" Command="{Binding CalibrateKnobsCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="230" Padding="4,2" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
                         <TextBlock Text="Night" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -296,7 +293,20 @@
                             <TextBlock Text="{Binding Status}" Style="{StaticResource PalDimLabel}" FontSize="13" TextWrapping="Wrap" />
                         </StackPanel>
 
-                        
+
+                        <!-- Guided knob calibration: covers the display while it runs. -->
+                        <Border Grid.RowSpan="3" Visibility="{Binding CalVisible, Converter={StaticResource PalBool}}"
+                                Background="Black" BorderBrush="{Binding Theme.TextBrush}" BorderThickness="3" CornerRadius="3" Margin="6" Padding="14">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding CalText}" Style="{StaticResource PalLabel}" TextWrapping="Wrap" FontSize="20" FontWeight="Bold" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,18,0,0">
+                                    <Button Content="I turned it" Style="{StaticResource PalButton}" MinWidth="0" Width="130" Height="40" FontSize="15"
+                                            Command="{Binding CalContinueCommand}" Visibility="{Binding CalCanContinue, Converter={StaticResource PalBool}}" />
+                                    <Button Content="Cancel" Style="{StaticResource PalButton}" MinWidth="0" Width="110" Height="40" FontSize="15"
+                                            Command="{Binding CalCancelCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Viewbox>
             </ScrollViewer>
