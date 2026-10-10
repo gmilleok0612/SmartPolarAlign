@@ -394,9 +394,22 @@ namespace PolarAlignLive {
 
         /// <summary>Guided calibration: for each axis, measure, ask for a known turn, measure again.</summary>
         private async Task CalibrateKnobs() {
-            if (axis == null) { ShowCalMessage("Knob calibration needs the polar axis first.\n\nRun Auto Capture, then press Calibrate Adjustment Knobs again."); return; }
             if (IsBusy) { ShowCalMessage("Press Stop first (Live or another run is active), then press Calibrate Adjustment Knobs again."); return; }
             if (!EquipmentReady()) { ShowCalMessage(Status); return; }
+            if (axis == null) {
+                // The knob calibration measures how far the polar AXIS moves, so it needs the axis. Find it first, automatically.
+                ShowCalMessage("Knob calibration needs to know where the polar axis points, so Auto Capture will run first.\n\n" +
+                               "The mount will slew in RA and take 3 frames. You will be asked to confirm the slew with SLEW before anything moves. " +
+                               "The knob calibration starts right after.");
+                Status = "Running Auto Capture first: the knob calibration needs the polar axis.";
+                await Task.Delay(5000);
+                CalVisible = false;
+                await AutoCapture();
+                if (axis == null) {
+                    ShowCalMessage("Auto Capture did not finish, so the knob calibration was not started.\n\n" + Status + "\n\nPress Calibrate Adjustment Knobs to try again.");
+                    return;
+                }
+            }
             SetCalRunning(true);
             cts = new CancellationTokenSource();
             var ct = cts.Token;
