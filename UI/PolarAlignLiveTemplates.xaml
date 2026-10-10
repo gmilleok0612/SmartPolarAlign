@@ -248,6 +248,7 @@
                         <Grid Grid.Row="1" Margin="4">
                             <ui:PolarDisplay MinHeight="60" MinWidth="60"
                                              Tint="{Binding Theme.TintColor}"
+                                             Quality="{Binding AlignmentLevel}"
                                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
                             <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,0,0,0" IsHitTestVisible="False">
                                 <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalLabel}" FontSize="20" FontWeight="Bold" />

@@ -28,6 +28,13 @@ namespace PolarAlignLive.UI {
             nameof(Tint), typeof(Color), typeof(PolarDisplay),
             new FrameworkPropertyMetadata(Color.FromRgb(0xB0, 0x18, 0x18), FrameworkPropertyMetadataOptions.AffectsRender));
 
+        public static readonly DependencyProperty QualityProperty = DependencyProperty.Register(
+            nameof(Quality), typeof(int), typeof(PolarDisplay),
+            new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsRender));
+
+        /// <summary>0 = not aligned enough, 1 = good enough for guiding (1-3'), 2 = excellent (under 1').</summary>
+        public int Quality { get => (int)GetValue(QualityProperty); set => SetValue(QualityProperty, value); }
+
         public Color Tint { get => (Color)GetValue(TintProperty); set => SetValue(TintProperty, value); }
 
         /// <summary>Arcmin the axis must move up (negative = down).</summary>
@@ -58,18 +65,34 @@ namespace PolarAlignLive.UI {
 
             // Auto range: outer ring = nice number >= 1.3 * current error.
             double err = HasSolution ? Math.Sqrt(MoveUp * MoveUp + MoveEast * MoveEast) : 20;
-            double range = NiceCeil(Math.Max(2.0, err * 1.3));
+            double range = NiceCeil(Math.Max(4.0, err * 1.3));   // at least 4' so the true-scale 3' ring always fits
             double pxPerArcmin = rMax / range;
 
-            // Rings at 1/3, 2/3 and 3/3 of range, plus the bullseye.
+            // True-scale reference rings: 1' (excellent) and 3' (good enough for guiding).
+            double r1 = pxPerArcmin * 1.0, r3 = pxPerArcmin * 3.0;
+
+            // Generic rings at 1/3, 2/3 and 3/3 of range (skipped where they would crowd the 1'/3' rings).
             for (int i = 1; i <= 3; i++) {
                 double r = rMax * i / 3.0;
+                if (Math.Abs(r - r1) < 10 || Math.Abs(r - r3) < 10) continue;
                 dc.DrawEllipse(null, RingPen, c, r, r);
                 Label(dc, Fmt(range * i / 3.0), new Point(c.X + r * 0.71 + 4, c.Y - r * 0.71 - 12), 11, DimRed);
             }
             dc.DrawLine(RingPen, new Point(c.X - rMax, c.Y), new Point(c.X + rMax, c.Y));
             dc.DrawLine(RingPen, new Point(c.X, c.Y - rMax), new Point(c.X, c.Y + rMax));
-            dc.DrawEllipse(null, BoldPen, c, 9, 9); // pole bullseye
+
+            // Reached good enough / excellent: the rings light up at full brightness with a translucent fill.
+            Color full = FullBright(tint);
+            Brush Glow = new SolidColorBrush(full);
+            Brush GlowFill = new SolidColorBrush(Color.FromArgb(70, full.R, full.G, full.B));
+            bool lit3 = Quality >= 1, lit1 = Quality >= 2;
+            if (r3 <= rMax) {
+                dc.DrawEllipse(lit3 && !lit1 ? GlowFill : null, lit3 ? new Pen(Glow, 4) : new Pen(DimRed, 2) { DashStyle = DashStyles.Dash }, c, r3, r3);
+                if (r3 >= 14) Label(dc, "3\u2032", new Point(c.X - r3 * 0.71 - 18, c.Y - r3 * 0.71 - 12), 11, lit3 ? Glow : DimRed);
+            }
+            dc.DrawEllipse(lit1 ? GlowFill : null, lit1 ? new Pen(Glow, 5) : new Pen(Red, 2.5), c, Math.Max(r1, 3), Math.Max(r1, 3));
+            if (r1 >= 14) Label(dc, "1\u2032", new Point(c.X + r1 * 0.71 + 4, c.Y + r1 * 0.71), 11, lit1 ? Glow : Red);
+            dc.DrawEllipse(Red, null, c, 3, 3);   // pole
 
             Label(dc, "N", new Point(c.X - 5, c.Y - rMax - 22), 13, Red);
             Label(dc, "E", new Point(c.X + rMax + 6, c.Y - 9), 13, Red);
@@ -89,6 +112,14 @@ namespace PolarAlignLive.UI {
             // Chevrons along each crosshair arm pointing the way to push the axis. East = +x, up = -y (screen).
             DrawChevrons(dc, ChevronPen, c, rMax, MoveEast > 0 ? 1 : -1, 0, Math.Abs(MoveEast));
             DrawChevrons(dc, ChevronPen, c, rMax, 0, MoveUp > 0 ? -1 : 1, Math.Abs(MoveUp));
+        }
+
+        /// <summary>Same hue, scaled so the strongest channel is 255 (ignores the night-mode dimmer).</summary>
+        private static Color FullBright(Color c) {
+            int m = Math.Max(c.R, Math.Max(c.G, c.B));
+            if (m == 0) return Color.FromRgb(255, 255, 255);
+            double f = 255.0 / m;
+            return Color.FromRgb((byte)Math.Min(255, c.R * f), (byte)Math.Min(255, c.G * f), (byte)Math.Min(255, c.B * f));
         }
 
         private static int Count(double arcmin) => arcmin < 0.5 ? 0 : arcmin < 3 ? 1 : arcmin < 12 ? 2 : 3;
