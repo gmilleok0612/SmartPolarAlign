@@ -66,9 +66,8 @@ namespace PolarAlignLive {
             gain = -1;
             binning = Math.Max((short)1, profileService.ActiveProfile.PlateSolveSettings.Binning);
             status = "Idle";
-            instructions = "Point at a plate-solvable field, then press Auto Capture (mount moves itself) or Capture Frame (you move it).";
+            instructions = "Point at a plate-solvable field, then press Auto Capture (the mount moves itself).";
 
-            CaptureFrameCommand = new AsyncRelayCommand(CaptureFrame, () => !IsBusy && axis == null && frames.Count < 3);
             StartLiveCommand = new AsyncRelayCommand(StartLive, () => !IsBusy && axis != null);
             StopCommand = new RelayCommand(Stop, () => IsBusy);
             ResetCommand = new RelayCommand(Reset, () => !IsBusy);
@@ -85,7 +84,10 @@ namespace PolarAlignLive {
             CycleAzUnitCommand = new RelayCommand(() => { azUnit = (azUnit + 1) % 3; azCal = 0; AfterCalChange("Az knob unit changed; run Calibrate Adjustment Knobs again."); });
             CalibrateKnobsCommand = new AsyncRelayCommand(CalibrateKnobs);
             CalContinueCommand = new RelayCommand(() => calTcs?.TrySetResult(true));
-            CalCancelCommand = new RelayCommand(() => { calTcs?.TrySetResult(false); try { cts?.Cancel(); } catch { } });
+            CalCancelCommand = new RelayCommand(() => {
+                if (!calRunning) { CalVisible = false; return; }
+                calTcs?.TrySetResult(false); try { cts?.Cancel(); } catch { }
+            });
             ToggleSettingsCommand = new RelayCommand(() => SettingsOpen = !SettingsOpen);
             // One-click open from the top-bar icon: NINA's icon toggles IsVisible, so keep it in step with what the
             // dock really shows, and bring the tab to the front whenever the panel becomes visible.
@@ -106,7 +108,6 @@ namespace PolarAlignLive {
             DimmerDownCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(-0.1));
         }
 
-        public ICommand CaptureFrameCommand { get; }
         public ICommand StartLiveCommand { get; }
         public ICommand StopCommand { get; }
         public ICommand ResetCommand { get; }
@@ -310,7 +311,6 @@ namespace PolarAlignLive {
 
         private void NotifyCommands() {
             // Always called from UI-context continuations or UI commands.
-            (CaptureFrameCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
             (AutoCaptureCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
             (StartLiveCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
             (StopCommand as RelayCommand)?.NotifyCanExecuteChanged();
@@ -325,9 +325,9 @@ namespace PolarAlignLive {
         private double altCal, azCal;
 
         private static string UnitLabel(int u) => u == 1 ? "turns" : u == 2 ? "degrees" : "tics";
-        /// <summary>Test turn per attempt: 5 tics, half a turn, or 180 degrees.</summary>
-        private static double CalStep(int u) => u == 1 ? 0.5 : u == 2 ? 180 : 5;
-        private static string CalStepText(int u) => u == 1 ? "HALF A TURN" : u == 2 ? "180 DEGREES (half a turn)" : "5 TICS";
+        /// <summary>Test turn per attempt: 6 tics, half a turn, or 180 degrees.</summary>
+        private static double CalStep(int u) => u == 1 ? 0.5 : u == 2 ? 180 : 6;
+        private static string CalStepText(int u) => u == 1 ? "1/2 turn" : u == 2 ? "180 degrees" : "6 tics";
 
         public string AltUnitText => "Alt knob: " + UnitLabel(altUnit);
         public string AzUnitText => "Az knob: " + UnitLabel(azUnit);
@@ -356,6 +356,12 @@ namespace PolarAlignLive {
         private bool calCanContinue;
         public bool CalCanContinue { get => calCanContinue; private set { calCanContinue = value; RaisePropertyChanged(); } }
         private TaskCompletionSource<bool> calTcs;
+        private bool calRunning;
+        public string CalCancelText => calRunning ? "Cancel" : "Close";
+        private void SetCalRunning(bool v) { calRunning = v; RaisePropertyChanged(nameof(CalCancelText)); }
+
+        /// <summary>Shows a short message in the overlay (only Cancel is offered; it closes the overlay).</summary>
+        private void ShowCalMessage(string text) { CalText = text; CalCanContinue = false; CalVisible = true; }
 
         private async Task<bool> WaitForCalContinue(CancellationToken ct) {
             calTcs = new TaskCompletionSource<bool>();
@@ -388,51 +394,54 @@ namespace PolarAlignLive {
 
         /// <summary>Guided calibration: for each axis, measure, ask for a known turn, measure again.</summary>
         private async Task CalibrateKnobs() {
-            if (axis == null) { Status = "Find the axis first (Auto Capture or Capture Frame), then calibrate the knobs."; return; }
-            if (IsBusy) { Status = "Press Stop first, then calibrate."; return; }
-            if (!EquipmentReady()) return;
+            if (axis == null) { ShowCalMessage("Knob calibration needs the polar axis first.\n\nRun Auto Capture, then press Calibrate Adjustment Knobs again."); return; }
+            if (IsBusy) { ShowCalMessage("Press Stop first (Live or another run is active), then press Calibrate Adjustment Knobs again."); return; }
+            if (!EquipmentReady()) { ShowCalMessage(Status); return; }
+            SetCalRunning(true);
             cts = new CancellationTokenSource();
             var ct = cts.Token;
             IsBusy = true;
             CalVisible = true;
+            string finalMsg = null;     // shown in the window when the routine ends (null = just close it)
             try {
                 for (int axisId = 1; axisId <= 2; axisId++) {
                     string name = axisId == 1 ? "ALTITUDE" : "AZIMUTH";
+                    string head = $"{name} knob ({axisId} of 2)\n\n";
                     int unit = axisId == 1 ? altUnit : azUnit;
                     double step = CalStep(unit);
 
-                    CalText = $"Knob calibration ({axisId} of 2): {name}\n\nTaking an image and plate solving to find the exact pointing position. Do not touch the mount.";
+                    CalText = head + "Taking frame to determine exact position in the sky - please wait.";
                     var start = await MeasureOnce(ct);
-                    if (!start.ok) { Status = "Calibration stopped: plate solve failed."; return; }
+                    if (!start.ok) { finalMsg = "Calibration stopped: the plate solve failed. Check focus and exposure, then try again."; return; }
 
                     double turned = 0, moved = 0;
                     for (int tries = 0; tries < 4; tries++) {
                         turned += step;
-                        CalText = $"Turn the {name} adjustment knob {(tries == 0 ? "" : "another ")}{CalStepText(unit)} CLOCKWISE.\n\n" +
-                                  "If the axis uses two opposing bolts, loosen one first, then tighten the other by that amount.\n\nPress \"I turned it\" when done.";
-                        if (!await WaitForCalContinue(ct)) { Status = "Calibration cancelled."; return; }
+                        CalText = head + (tries == 0 ? "" : "Not enough movement measured.\n\n") + "Move knob " + CalStepText(unit) + " clockwise.";
+                        if (!await WaitForCalContinue(ct)) return;
 
-                        CalText = "Measuring the new position. Do not touch the mount.";
+                        CalText = head + "Taking frame to determine exact position in the sky after adjustment - please wait.";
                         var end = await MeasureOnce(ct);
-                        if (!end.ok) { Status = "Calibration stopped: plate solve failed."; return; }
+                        if (!end.ok) { finalMsg = "Calibration stopped: the plate solve failed. Check focus and exposure, then try again."; return; }
                         moved = axisId == 1 ? start.up - end.up : start.east - end.east;   // how far the axis actually moved (arcmin)
                         if (Math.Abs(moved) >= 1.0) break;
                     }
-                    if (Math.Abs(moved) < 1.0) { Status = "Calibration stopped: the axis did not move. Check that you turned the right knob."; return; }
+                    if (Math.Abs(moved) < 1.0) { finalMsg = "Calibration stopped: the axis did not move. Check that you turned the right knob."; return; }
 
                     double k = moved / turned;
                     if (axisId == 1) altCal = k; else azCal = k;
                     SaveAutoSettings(); RaiseCalText();
                 }
-                CalText = "Calibration complete.";
-                AfterCalChange("Knobs calibrated. Start Live: the arrows will now say how many " + "tics / turns / degrees to turn.");
+                finalMsg = "Start Live View to view adjustments to center the pole.";
+                AfterCalChange("Knobs calibrated. Start Live View to see how far to turn each knob.");
             } catch (OperationCanceledException) {
                 Status = "Calibration cancelled.";
             } catch (Exception ex) {
-                Status = FriendlyError(ex);
+                finalMsg = FriendlyError(ex);
             } finally {
-                CalVisible = false;
+                SetCalRunning(false);
                 CalCanContinue = false;
+                if (finalMsg != null) { CalText = finalMsg; Status = finalMsg; } else CalVisible = false;
                 IsBusy = false;
             }
         }
@@ -515,21 +524,6 @@ namespace PolarAlignLive {
 
         // ---------- commands ----------
 
-        private async Task CaptureFrame() {
-            if (!EquipmentReady()) return;
-            cts = new CancellationTokenSource();
-            IsBusy = true;
-            try {
-                await CaptureCore(cts.Token);
-            } catch (OperationCanceledException) {
-                Status = "Cancelled.";
-            } catch (Exception ex) {
-                Status = FriendlyError(ex);
-            } finally {
-                IsBusy = false;
-            }
-        }
-
         /// <summary>Capture + solve one frame and store it. Returns true if the frame was accepted.</summary>
         private async Task<bool> CaptureCore(CancellationToken ct) {
             Status = $"Capturing + solving frame {frames.Count + 1}...";
@@ -564,7 +558,7 @@ namespace PolarAlignLive {
 
             if (frames.Count < 3) {
                 Status = $"Frame {frames.Count} solved.";
-                Instructions = "Rotate the mount in RA only (>= ~20°, do not touch Dec), then press Capture Frame (manual). Or press Reset and use Auto Capture to let the mount move itself.";
+                Instructions = "Auto Capture is moving the mount in RA for the next frame. Do not touch the mount.";
                 return true;
             }
 
@@ -793,7 +787,7 @@ namespace PolarAlignLive {
             FrameCountText = "Frames: 0 / 3";
             AxisQualityText = "";
             Status = "Idle";
-            Instructions = "Point at a plate-solvable field, then press Auto Capture (mount moves itself) or Capture Frame (you move it).";
+            Instructions = "Point at a plate-solvable field, then press Auto Capture (the mount moves itself).";
             NotifyCommands();
         }
     }
