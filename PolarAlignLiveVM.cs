@@ -81,10 +81,11 @@ namespace PolarAlignLive {
                 } catch (Exception ex) { Status = FriendlyError(ex); }
             });
             AbortSlewCommand = new RelayCommand(AbortSlew);
-            CycleAltUnitCommand = new RelayCommand(() => { altUnit = (altUnit + 1) % 3; altCal = 0; AfterCalChange("Alt knob unit changed; recalibrate it."); });
-            CycleAzUnitCommand = new RelayCommand(() => { azUnit = (azUnit + 1) % 3; azCal = 0; AfterCalChange("Az knob unit changed; recalibrate it."); });
-            CalAltCommand = new RelayCommand(() => CalibrateAxis(1));
-            CalAzCommand = new RelayCommand(() => CalibrateAxis(2));
+            CycleAltUnitCommand = new RelayCommand(() => { altUnit = (altUnit + 1) % 3; altCal = 0; AfterCalChange("Alt knob unit changed; run Calibrate Adjustment Knobs again."); });
+            CycleAzUnitCommand = new RelayCommand(() => { azUnit = (azUnit + 1) % 3; azCal = 0; AfterCalChange("Az knob unit changed; run Calibrate Adjustment Knobs again."); });
+            CalibrateKnobsCommand = new AsyncRelayCommand(CalibrateKnobs);
+            CalContinueCommand = new RelayCommand(() => calTcs?.TrySetResult(true));
+            CalCancelCommand = new RelayCommand(() => { calTcs?.TrySetResult(false); try { cts?.Cancel(); } catch { } });
             ToggleSettingsCommand = new RelayCommand(() => SettingsOpen = !SettingsOpen);
             // One-click open from the top-bar icon: NINA's icon toggles IsVisible, so keep it in step with what the
             // dock really shows, and bring the tab to the front whenever the panel becomes visible.
@@ -114,8 +115,9 @@ namespace PolarAlignLive {
         public ICommand AbortSlewCommand { get; }
         public ICommand CycleAltUnitCommand { get; }
         public ICommand CycleAzUnitCommand { get; }
-        public ICommand CalAltCommand { get; }
-        public ICommand CalAzCommand { get; }
+        public ICommand CalibrateKnobsCommand { get; }
+        public ICommand CalContinueCommand { get; }
+        public ICommand CalCancelCommand { get; }
         public ICommand ToggleSettingsCommand { get; }
         public ICommand MaximizeCommand { get; }
 
@@ -225,8 +227,8 @@ namespace PolarAlignLive {
                     else if (kv[0] == "settings") settingsOpen = v == 1;
                     else if (kv[0] == "altunit") altUnit = (int)Math.Max(0, Math.Min(2, v));
                     else if (kv[0] == "azunit") azUnit = (int)Math.Max(0, Math.Min(2, v));
-                    else if (kv[0] == "altcal") altCal = v;
-                    else if (kv[0] == "azcal") azCal = v;
+                    else if (kv[0] == "altcal2") altCal = v;
+                    else if (kv[0] == "azcal2") azCal = v;
                 }
             } catch { }
         }
@@ -241,8 +243,8 @@ namespace PolarAlignLive {
                     "settings=" + (settingsOpen ? "1" : "0"),
                     "altunit=" + altUnit.ToString(CultureInfo.InvariantCulture),
                     "azunit=" + azUnit.ToString(CultureInfo.InvariantCulture),
-                    "altcal=" + altCal.ToString("R", CultureInfo.InvariantCulture),
-                    "azcal=" + azCal.ToString("R", CultureInfo.InvariantCulture) });
+                    "altcal2=" + altCal.ToString("R", CultureInfo.InvariantCulture),
+                    "azcal2=" + azCal.ToString("R", CultureInfo.InvariantCulture) });
             } catch { }
         }
 
@@ -268,7 +270,7 @@ namespace PolarAlignLive {
         private bool autoRunning;
 
         private bool isBusy;
-        public bool IsBusy { get => isBusy; private set { isBusy = value; RaisePropertyChanged(); NotifyCommands(); if (!value && calAxis != 0) { calAxis = 0; RaiseCalText(); } } }
+        public bool IsBusy { get => isBusy; private set { isBusy = value; RaisePropertyChanged(); NotifyCommands(); } }
 
         private string status;
         public string Status { get => status; private set { status = value; RaisePropertyChanged(); } }
@@ -315,25 +317,20 @@ namespace PolarAlignLive {
             (ResetCommand as RelayCommand)?.NotifyCanExecuteChanged();
         }
 
-        // ---------- adjuster-knob calibration (optional) ----------
-        // Units per axis: 0 = tics, 1 = quarter turns, 2 = degrees of knob rotation. Calibration = arcminutes the axis
-        // moves per unit turned clockwise (signed). 0 = not calibrated. Stored in the settings file.
+        // ---------- adjuster-knob calibration (guided) ----------
+        // Units per axis: 0 = tics, 1 = turns, 2 = degrees of knob rotation. Calibration = arcminutes the axis moves per
+        // unit turned clockwise (signed). 0 = not calibrated. Stored in the settings file.
 
         private int altUnit, azUnit;
         private double altCal, azCal;
-        private int calAxis;            // 0 none, 1 alt start marked, 2 az start marked
-        private double calStart;
 
-        private static string UnitLabel(int u) => u == 1 ? "\u00BC turns" : u == 2 ? "degrees" : "tics";
+        private static string UnitLabel(int u) => u == 1 ? "turns" : u == 2 ? "degrees" : "tics";
+        /// <summary>Test turn per attempt: 5 tics, half a turn, or 180 degrees.</summary>
+        private static double CalStep(int u) => u == 1 ? 0.5 : u == 2 ? 180 : 5;
+        private static string CalStepText(int u) => u == 1 ? "HALF A TURN" : u == 2 ? "180 DEGREES (half a turn)" : "5 TICS";
 
         public string AltUnitText => "Alt knob: " + UnitLabel(altUnit);
         public string AzUnitText => "Az knob: " + UnitLabel(azUnit);
-        public string AltCalText => calAxis == 1 ? "Alt: set end" : (altCal != 0 ? "Recal Alt" : "Cal Alt start");
-        public string AzCalText => calAxis == 2 ? "Az: set end" : (azCal != 0 ? "Recal Az" : "Cal Az start");
-
-        private double calAmount = 1;
-        /// <summary>How far the knob was turned during calibration, in the chosen unit. Negative = counter-clockwise.</summary>
-        public double CalAmount { get => calAmount; set { calAmount = value; RaisePropertyChanged(); } }
 
         public string AltAdviceText => Advice(MoveUpArcmin, altCal, altUnit);
         public string AzAdviceText => Advice(MoveEastArcmin, azCal, azUnit);
@@ -345,29 +342,99 @@ namespace PolarAlignLive {
         }
 
         private void RaiseCalText() {
-            RaisePropertyChanged(nameof(AltCalText)); RaisePropertyChanged(nameof(AzCalText));
             RaisePropertyChanged(nameof(AltUnitText)); RaisePropertyChanged(nameof(AzUnitText));
             RaisePropertyChanged(nameof(AltAdviceText)); RaisePropertyChanged(nameof(AzAdviceText));
         }
 
-        private void AfterCalChange(string msg) { calAxis = 0; SaveAutoSettings(); RaiseCalText(); Status = msg; }
+        private void AfterCalChange(string msg) { SaveAutoSettings(); RaiseCalText(); Status = msg; }
 
-        /// <summary>First press: remember the current live reading. Second press (after turning the knob by CalAmount
-        /// and waiting for fresh Live updates): compute arcmin per unit.</summary>
-        private void CalibrateAxis(int axisId) {
-            if (!IsBusy || !HasSolution) { Status = "Calibration needs Start Live running with a reading."; return; }
-            double now = axisId == 1 ? MoveUpArcmin : MoveEastArcmin;
-            if (calAxis != axisId) {
-                calAxis = axisId; calStart = now; RaiseCalText();
-                Status = "Start marked. Turn the " + (axisId == 1 ? "altitude" : "azimuth") + " knob by the amount in Turned (negative = counter-clockwise), wait for 2 Live updates, press again.";
-                return;
+        // wizard overlay state
+        private bool calVisible;
+        public bool CalVisible { get => calVisible; private set { calVisible = value; RaisePropertyChanged(); } }
+        private string calText = "";
+        public string CalText { get => calText; private set { calText = value; RaisePropertyChanged(); } }
+        private bool calCanContinue;
+        public bool CalCanContinue { get => calCanContinue; private set { calCanContinue = value; RaisePropertyChanged(); } }
+        private TaskCompletionSource<bool> calTcs;
+
+        private async Task<bool> WaitForCalContinue(CancellationToken ct) {
+            calTcs = new TaskCompletionSource<bool>();
+            CalCanContinue = true;
+            using (ct.Register(() => calTcs.TrySetResult(false))) {
+                bool r = await calTcs.Task;
+                CalCanContinue = false;
+                return r;
             }
-            if (Math.Abs(calAmount) < 1e-6) { Status = "Enter how far you turned the knob in Turned, then press again."; return; }
-            double moved = calStart - now;                 // how far the axis actually moved (arcmin)
-            if (Math.Abs(moved) < 1.0) { calAxis = 0; RaiseCalText(); Status = $"The axis moved only {Math.Abs(moved):0.0}\u2032. Turn the knob further and start the calibration again."; return; }
-            double k = moved / calAmount;
-            if (axisId == 1) altCal = k; else azCal = k;
-            AfterCalChange($"Calibrated: {Math.Abs(k).ToString("0.00", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(axisId == 1 ? altUnit : azUnit).TrimEnd('s')}; clockwise turns move the axis {(axisId == 1 ? (k > 0 ? "up" : "down") : (k > 0 ? "east" : "west"))}.");
+        }
+
+        /// <summary>Capture + solve (up to 3 tries) and return how far the RA axis is from the pole right now.</summary>
+        private async Task<(bool ok, double up, double east)> MeasureOnce(CancellationToken ct) {
+            for (int attempt = 0; attempt < 3; attempt++) {
+                var solver = BuildSolver(true, out var parameter, out var seq);
+                var result = await SolveOnce(solver, parameter, seq, ct);
+                if (result == null || !result.Success || result.Coordinates == null) continue;
+                var live = ToFrame(result);
+                var a = PolarMath.AxisOnSky(axis, live);
+                a.ToRaDec(out double aRa, out double aDec);
+                var ofDate = new Coordinates(Angle.ByDegree(aRa), Angle.ByDegree(aDec), Epoch.J2000).Transform(Epoch.JNOW);
+                var a2 = profileService.ActiveProfile.AstrometrySettings;
+                PolarMath.PoleError(ofDate.RADegrees, ofDate.Dec, a2.Latitude, DateTime.UtcNow, a2.Longitude,
+                                    out double up, out double east, out double total);
+                MoveUpArcmin = up; MoveEastArcmin = east; TotalErrorArcmin = total; HasSolution = true;
+                return (true, up, east);
+            }
+            return (false, 0, 0);
+        }
+
+        /// <summary>Guided calibration: for each axis, measure, ask for a known turn, measure again.</summary>
+        private async Task CalibrateKnobs() {
+            if (axis == null) { Status = "Find the axis first (Auto Capture or Capture Frame), then calibrate the knobs."; return; }
+            if (IsBusy) { Status = "Press Stop first, then calibrate."; return; }
+            if (!EquipmentReady()) return;
+            cts = new CancellationTokenSource();
+            var ct = cts.Token;
+            IsBusy = true;
+            CalVisible = true;
+            try {
+                for (int axisId = 1; axisId <= 2; axisId++) {
+                    string name = axisId == 1 ? "ALTITUDE" : "AZIMUTH";
+                    int unit = axisId == 1 ? altUnit : azUnit;
+                    double step = CalStep(unit);
+
+                    CalText = $"Knob calibration ({axisId} of 2): {name}\n\nTaking an image and plate solving to find the exact pointing position. Do not touch the mount.";
+                    var start = await MeasureOnce(ct);
+                    if (!start.ok) { Status = "Calibration stopped: plate solve failed."; return; }
+
+                    double turned = 0, moved = 0;
+                    for (int tries = 0; tries < 4; tries++) {
+                        turned += step;
+                        CalText = $"Turn the {name} adjustment knob {(tries == 0 ? "" : "another ")}{CalStepText(unit)} CLOCKWISE.\n\n" +
+                                  "If the axis uses two opposing bolts, loosen one first, then tighten the other by that amount.\n\nPress \"I turned it\" when done.";
+                        if (!await WaitForCalContinue(ct)) { Status = "Calibration cancelled."; return; }
+
+                        CalText = "Measuring the new position. Do not touch the mount.";
+                        var end = await MeasureOnce(ct);
+                        if (!end.ok) { Status = "Calibration stopped: plate solve failed."; return; }
+                        moved = axisId == 1 ? start.up - end.up : start.east - end.east;   // how far the axis actually moved (arcmin)
+                        if (Math.Abs(moved) >= 1.0) break;
+                    }
+                    if (Math.Abs(moved) < 1.0) { Status = "Calibration stopped: the axis did not move. Check that you turned the right knob."; return; }
+
+                    double k = moved / turned;
+                    if (axisId == 1) altCal = k; else azCal = k;
+                    SaveAutoSettings(); RaiseCalText();
+                }
+                CalText = "Calibration complete.";
+                AfterCalChange("Knobs calibrated. Start Live: the arrows will now say how many " + "tics / turns / degrees to turn.");
+            } catch (OperationCanceledException) {
+                Status = "Calibration cancelled.";
+            } catch (Exception ex) {
+                Status = FriendlyError(ex);
+            } finally {
+                CalVisible = false;
+                CalCanContinue = false;
+                IsBusy = false;
+            }
         }
 
         // ---------- solving ----------
