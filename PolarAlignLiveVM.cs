@@ -286,7 +286,7 @@ namespace PolarAlignLive {
         public string AxisQualityText { get => axisQualityText; private set { axisQualityText = value; RaisePropertyChanged(); } }
 
         private bool hasSolution;
-        public bool HasSolution { get => hasSolution; private set { hasSolution = value; RaisePropertyChanged(); } }
+        public bool HasSolution { get => hasSolution; private set { hasSolution = value; RaisePropertyChanged(); RaisePropertyChanged(nameof(AlignmentQualityText)); } }
 
         private double moveUpArcmin;
         public double MoveUpArcmin { get => moveUpArcmin; private set { moveUpArcmin = value; RaisePropertyChanged(); RaisePropertyChanged(nameof(MoveUpText)); RaisePropertyChanged(nameof(AltAdviceText)); } }
@@ -295,13 +295,18 @@ namespace PolarAlignLive {
         public double MoveEastArcmin { get => moveEastArcmin; private set { moveEastArcmin = value; RaisePropertyChanged(); RaisePropertyChanged(nameof(MoveEastText)); RaisePropertyChanged(nameof(AzAdviceText)); } }
 
         private double totalErrorArcmin;
-        public double TotalErrorArcmin { get => totalErrorArcmin; private set { totalErrorArcmin = value; RaisePropertyChanged(); RaisePropertyChanged(nameof(TotalErrorText)); } }
+        public double TotalErrorArcmin { get => totalErrorArcmin; private set { totalErrorArcmin = value; RaisePropertyChanged(); RaisePropertyChanged(nameof(TotalErrorText)); RaisePropertyChanged(nameof(AlignmentQualityText)); } }
 
         public string MoveUpText => !HasSolution ? "ALT  --" :
             (Math.Abs(MoveUpArcmin) < 0.5 ? "ALT  OK" : $"ALT  {(MoveUpArcmin > 0 ? "RAISE axis" : "LOWER axis")}  {Fmt(Math.Abs(MoveUpArcmin))}");
 
         public string MoveEastText => !HasSolution ? "AZ  --" :
             (Math.Abs(MoveEastArcmin) < 0.5 ? "AZ  OK" : $"AZ  swing axis {(MoveEastArcmin > 0 ? "EAST" : "WEST")}  {Fmt(Math.Abs(MoveEastArcmin))}");
+
+        /// <summary>Fixed verdict (not user-adjustable): under 1' excellent, 1-3' good enough for guided imaging.</summary>
+        public string AlignmentQualityText => !HasSolution ? "" :
+            TotalErrorArcmin < 1.0 ? "ALIGNMENT EXCELLENT" :
+            TotalErrorArcmin <= 3.0 ? "ALIGNMENT GOOD ENOUGH FOR GUIDING" : "";
 
         public string TotalErrorText => !HasSolution ? "Polar error  --" : $"Polar error  {Fmt(TotalErrorArcmin)}";
 
