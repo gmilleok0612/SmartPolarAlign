@@ -82,7 +82,7 @@ namespace PolarAlignLive {
             AbortSlewCommand = new RelayCommand(AbortSlew);
             CycleAltUnitCommand = new RelayCommand(() => { altUnit = (altUnit + 1) % 3; altCal = 0; AfterCalChange("Alt knob unit changed; run Calibrate Adjustment Knobs again."); });
             CycleAzUnitCommand = new RelayCommand(() => { azUnit = (azUnit + 1) % 3; azCal = 0; AfterCalChange("Az knob unit changed; run Calibrate Adjustment Knobs again."); });
-            CalibrateKnobsCommand = new AsyncRelayCommand(CalibrateKnobs);
+            CalibrateKnobsCommand = new AsyncRelayCommand(CalibrateKnobsGuarded);
             CalContinueCommand = new RelayCommand(() => calTcs?.TrySetResult(true));
             CalCancelCommand = new RelayCommand(() => {
                 if (!calRunning) { CalVisible = false; return; }
@@ -267,6 +267,8 @@ namespace PolarAlignLive {
         public bool ConfirmPending { get => confirmPending; private set { confirmPending = value; RaisePropertyChanged(); } }
 
         private string confirmText = "";
+        private string confirmYesText = "SLEW";
+        public string ConfirmYesText { get => confirmYesText; private set { confirmYesText = value; RaisePropertyChanged(); } }
         public string ConfirmText { get => confirmText; private set { confirmText = value; RaisePropertyChanged(); } }
 
         private TaskCompletionSource<bool> confirmTcs;
@@ -399,12 +401,31 @@ namespace PolarAlignLive {
         }
 
         /// <summary>Guided calibration: for each axis, measure, ask for a known turn, measure again.</summary>
+        private bool calibrating;
+        /// <summary>True while the calibration runs: the top instruction/frame text is hidden so it can't be mistaken for a to-do.</summary>
+        public bool InstructionsShown => !calibrating;
+
+        private async Task CalibrateKnobsGuarded() {
+            if (IsBusy) { ShowCalMessage("Press Stop first (Live or another run is active), then press Calibrate Adjustment Knobs again."); return; }
+            calibrating = true; RaisePropertyChanged(nameof(InstructionsShown));
+            try { await CalibrateKnobs(); }
+            finally { calibrating = false; RaisePropertyChanged(nameof(InstructionsShown)); }
+        }
+
         private async Task CalibrateKnobs() {
             if (IsBusy) { ShowCalMessage("Press Stop first (Live or another run is active), then press Calibrate Adjustment Knobs again."); return; }
             if (!EquipmentReady()) { ShowCalMessage(Status); return; }
             if (axis == null) {
                 // The knob calibration measures how far the polar AXIS moves, so it needs the axis. Find it first, automatically.
-                Status = "Finding the polar axis first for the knob calibration.";
+                cts = new CancellationTokenSource();
+                ConfirmText = "Calibration is about to begin. It needs to slew the scope. Make sure the cables are clear and the mount is ready to slew.";
+                ConfirmYesText = "CONTINUE";
+                Status = "Waiting for your confirmation before calibration starts.";
+                ConfirmPending = true;
+                bool go = await WaitForConfirm(cts.Token);
+                ConfirmPending = false;
+                ConfirmYesText = "SLEW";
+                if (!go) { Status = "Cancelled. The mount was not moved."; return; }
                 await AutoCaptureCore(true);
                 if (axis == null) {
                     ShowCalMessage("Auto Capture did not finish, so the knob calibration was not started.\n\n" + Status + "\n\nPress Calibrate Adjustment Knobs to try again.");
