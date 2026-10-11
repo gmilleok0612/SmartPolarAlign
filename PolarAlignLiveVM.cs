@@ -346,7 +346,11 @@ namespace PolarAlignLive {
         private string Advice(double needArcmin, double cal, int unit, string who = "") {
             if (!HasSolution || cal == 0 || Math.Abs(needArcmin) < 0.5) return "";
             double u = needArcmin / cal;
-            return $"\u2248 {Math.Abs(u).ToString("0.0", CultureInfo.InvariantCulture)} {UnitLabel(unit)} {(u > 0 ? "clockwise" : "counter-clockwise")}{who}";
+            double m = Math.Abs(u);
+            string amount = unit == 1 ? m.ToString("0.00", CultureInfo.InvariantCulture) + " turns" + (m < 0.25 ? $" (about {(m * 360).ToString("0", CultureInfo.InvariantCulture)}\u00B0 of knob rotation)" : "")
+                          : unit == 2 ? m.ToString("0", CultureInfo.InvariantCulture) + " degrees"
+                          : m.ToString("0.0", CultureInfo.InvariantCulture) + " tics";
+            return $"\u2248 {amount} {(u > 0 ? "clockwise" : "counter-clockwise")}{who}";
         }
 
         private void RaiseCalText() {
