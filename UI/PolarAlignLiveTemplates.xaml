@@ -184,6 +184,7 @@
                     <Button Content="{Binding AltUnitText}" Command="{Binding CycleAltUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding AzUnitText}" Command="{Binding CycleAzUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding BeepText}" Command="{Binding ToggleBeepCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
+                    <Button Content="{Binding RefractionText}" Command="{Binding ToggleRefractionCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding RemoteToggleText}" Command="{Binding ToggleRemoteCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="180" Padding="4,2" Margin="3,3,10,3" />
                     <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
                         <TextBlock Text="Port" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />

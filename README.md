@@ -34,9 +34,10 @@ Allow the port through Windows Firewall. Local network only.
 - Image mirroring cancels out and is irrelevant.
 
 ## Known limits
-- Northern hemisphere only. No refraction correction. Needs profile latitude/longitude correct and PC clock correct.
+- Northern hemisphere only. Needs profile latitude/longitude correct and PC clock correct.
 - Live rate = exposure + solve time per frame (seconds, not video rate).
 - Dec must not move between frames 1-3 (rejected if mount reports >0.5 deg Dec change).
+- Refraction: Settings > "Refraction: On" (default) aims at the apparent pole, which sits about 1' above the true pole at mid-northern latitudes (the bend of starlight by the atmosphere, scaled for your site elevation). Turn it off to aim at the true pole.
 - Settings (including knob calibration) are saved in %LOCALAPPDATA%\NINA\PolarAlignLive.auto.settings.
 
 ## No local build tools? Build on GitHub (free)

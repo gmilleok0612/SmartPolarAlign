@@ -80,6 +80,7 @@ namespace PolarAlignLive {
                 } catch (Exception ex) { Status = FriendlyError(ex); }
             });
             AbortSlewCommand = new RelayCommand(AbortSlew);
+            ToggleRefractionCommand = new RelayCommand(() => { refrOn = !refrOn; SaveAutoSettings(); RaisePropertyChanged(nameof(RefractionText)); });
             ToggleBeepCommand = new RelayCommand(() => { beepOn = !beepOn; SaveAutoSettings(); RaisePropertyChanged(nameof(BeepText)); if (beepOn) Beep(); });
             CycleAltUnitCommand = new RelayCommand(() => { altUnit = (altUnit + 1) % 3; altCal = 0; AfterCalChange("Alt knob unit changed; run Calibrate Adjustment Knobs again."); });
             CycleAzUnitCommand = new RelayCommand(() => { azUnit = (azUnit + 1) % 3; azCal = 0; AfterCalChange("Az knob unit changed; run Calibrate Adjustment Knobs again."); });
@@ -182,6 +183,22 @@ namespace PolarAlignLive {
         public ICommand CycleAzUnitCommand { get; }
         public ICommand CalibrateKnobsCommand { get; }
         public ICommand ToggleBeepCommand { get; }
+
+        private bool refrOn = true;
+        public string RefractionText => refrOn ? "Refraction: On" : "Refraction: Off";
+        public ICommand ToggleRefractionCommand { get; private set; }
+
+        /// <summary>Refraction lift of the pole (arcmin) for this site, or 0 when the option is off.</summary>
+        private double RefractionNow(double latDeg) {
+            if (!refrOn) return 0;
+            double elev = 0;
+            try {
+                var p = profileService.ActiveProfile.AstrometrySettings.GetType().GetProperty("Elevation");
+                if (p != null) elev = Convert.ToDouble(p.GetValue(profileService.ActiveProfile.AstrometrySettings));
+            } catch { }
+            if (double.IsNaN(elev) || elev < -400 || elev > 6000) elev = 0;
+            return PolarMath.RefractionArcmin(latDeg, elev);
+        }
 
         private bool beepOn = true;
         public string BeepText => beepOn ? "Live beep: On" : "Live beep: Off";
@@ -304,6 +321,7 @@ namespace PolarAlignLive {
                     else if (kv[0] == "altunit") altUnit = (int)Math.Max(0, Math.Min(2, v));
                     else if (kv[0] == "azunit") azUnit = (int)Math.Max(0, Math.Min(2, v));
                     else if (kv[0] == "beep") beepOn = v != 0;
+                    else if (kv[0] == "refr") refrOn = v != 0;
                     else if (kv[0] == "remote") remoteEnabled = v != 0;
                     else if (kv[0] == "rport") remotePort = (int)Math.Max(1024, Math.Min(65535, v));
                     else if (kv[0] == "rpin") remotePin = (int)Math.Max(0, Math.Min(999999, v));
@@ -322,6 +340,7 @@ namespace PolarAlignLive {
                     "crop=" + cropPercent.ToString(CultureInfo.InvariantCulture),
                     "settings=" + (settingsOpen ? "1" : "0"),
                     "beep=" + (beepOn ? "1" : "0"),
+                    "refr=" + (refrOn ? "1" : "0"),
                     "remote=" + (remoteEnabled ? "1" : "0"),
                     "rport=" + remotePort.ToString(CultureInfo.InvariantCulture),
                     "rpin=" + remotePin.ToString(CultureInfo.InvariantCulture),
@@ -478,7 +497,7 @@ namespace PolarAlignLive {
                 var ofDate = new Coordinates(Angle.ByDegree(aRa), Angle.ByDegree(aDec), Epoch.J2000).Transform(Epoch.JNOW);
                 var a2 = profileService.ActiveProfile.AstrometrySettings;
                 PolarMath.PoleError(ofDate.RADegrees, ofDate.Dec, a2.Latitude, DateTime.UtcNow, a2.Longitude,
-                                    out double up, out double east, out double total);
+                                    out double up, out double east, out double total, RefractionNow(a2.Latitude));
                 MoveUpArcmin = up; MoveEastArcmin = east; TotalErrorArcmin = total; HasSolution = true;
                 return (true, up, east);
             }
@@ -882,7 +901,7 @@ namespace PolarAlignLive {
                     var ofDate = new Coordinates(Angle.ByDegree(aRa), Angle.ByDegree(aDec), Epoch.J2000).Transform(Epoch.JNOW);
                     var a2 = profileService.ActiveProfile.AstrometrySettings;
                     PolarMath.PoleError(ofDate.RADegrees, ofDate.Dec, a2.Latitude, DateTime.UtcNow, a2.Longitude,
-                                        out double up, out double east, out double total);
+                                        out double up, out double east, out double total, RefractionNow(a2.Latitude));
 
                     MoveUpArcmin = up;
                     MoveEastArcmin = east;

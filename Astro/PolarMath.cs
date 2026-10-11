@@ -196,13 +196,28 @@ namespace PolarAlignLive.Astro {
         /// axisRaDeg/axisDecDeg must be of date (JNow).
         /// </summary>
         public static void PoleError(double axisRaDeg, double axisDecDeg, double latDeg, DateTime utc, double longitudeEastDeg,
-                                     out double moveUpArcmin, out double moveEastArcmin, out double totalArcmin) {
+                                     out double moveUpArcmin, out double moveEastArcmin, out double totalArcmin,
+                                     double refractionArcmin = 0) {
             double lst = LocalSiderealDeg(utc, longitudeEastDeg);
             AltAz(axisRaDeg, axisDecDeg, latDeg, lst, out double alt, out double az);
             double azWrapped = az > 180.0 ? az - 360.0 : az; // pole is at az 0
-            moveUpArcmin = (latDeg - alt) * 60.0;
+            // With refraction the target is the apparent pole, which sits refractionArcmin higher than the true pole.
+            moveUpArcmin = (latDeg - alt) * 60.0 + refractionArcmin;
             moveEastArcmin = -azWrapped * System.Math.Cos(alt * D2R) * 60.0;
-            totalArcmin = (90.0 - axisDecDeg) * 60.0; // true polar distance of the axis
+            totalArcmin = refractionArcmin == 0
+                ? (90.0 - axisDecDeg) * 60.0                                              // true polar distance of the axis
+                : System.Math.Sqrt(moveUpArcmin * moveUpArcmin + moveEastArcmin * moveEastArcmin);   // distance to the apparent pole
+        }
+
+        /// <summary>
+        /// Atmospheric refraction in arcminutes at a true altitude (Bennett's formula, 1010 hPa / 10 C),
+        /// scaled for site elevation (standard atmosphere) and temperature.
+        /// </summary>
+        public static double RefractionArcmin(double trueAltDeg, double elevationM = 0, double tempC = 10) {
+            if (trueAltDeg < 5) return 0;
+            double r = 1.0 / System.Math.Tan((trueAltDeg + 7.31 / (trueAltDeg + 4.4)) * D2R);
+            double pressure = 1013.25 * System.Math.Pow(System.Math.Max(0.3, 1.0 - 2.25577e-5 * elevationM), 5.25588);
+            return r * (pressure / 1010.0) * (283.0 / (273.0 + tempC));
         }
     }
 }
