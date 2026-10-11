@@ -107,6 +107,69 @@ namespace PolarAlignLive {
             CancelSlewCommand = new RelayCommand(() => confirmTcs?.TrySetResult(false));
             DimmerUpCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(0.1));
             DimmerDownCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(-0.1));
+            ToggleRemoteCommand = new RelayCommand(() => { RemoteEnabled = !RemoteEnabled; });
+            if (remotePin == 0) { remotePin = new Random().Next(1000, 10000); SaveAutoSettings(); }
+            ApplyRemote();
+        }
+
+        // ---------- phone access (small web server in the plugin; the phone opens the page in its browser) ----------
+
+        private PolarAlignLive.Remote.RemoteServer remoteServer;
+        private bool remoteEnabled;
+        private int remotePort = 5050;
+        private int remotePin;
+        private string remoteMessage = "";
+        public ICommand ToggleRemoteCommand { get; }
+
+        public bool RemoteEnabled { get => remoteEnabled; set { remoteEnabled = value; SaveAutoSettings(); ApplyRemote(); } }
+        public string RemoteToggleText => remoteEnabled ? "Phone access: On" : "Phone access: Off";
+        public string RemotePortText {
+            get => remotePort.ToString(CultureInfo.InvariantCulture);
+            set { if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) && v >= 1024 && v <= 65535) { remotePort = v; SaveAutoSettings(); ApplyRemote(); } RaisePropertyChanged(); }
+        }
+        public string RemotePinText {
+            get => remotePin.ToString(CultureInfo.InvariantCulture);
+            set { if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) && v >= 1 && v <= 999999) { remotePin = v; SaveAutoSettings(); ApplyRemote(); } RaisePropertyChanged(); }
+        }
+        public string RemoteInfoText => remoteMessage;
+
+        private int solveSeq;
+        /// <summary>Counts new Live View solutions so the phone can beep/vibrate on each one.</summary>
+        public int SolveSeq => solveSeq;
+
+        private static string LocalAddresses() {
+            var list = new List<string>();
+            try {
+                foreach (var a in System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName()).AddressList) {
+                    if (a.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+                    string t = a.ToString();
+                    if (t.StartsWith("169.254.") || t.StartsWith("127.")) continue;
+                    list.Add(t);
+                }
+            } catch { }
+            return list.Count == 0 ? "<this PC's IP>" : string.Join(" or ", list);
+        }
+
+        private void ApplyRemote() {
+            try {
+                if (remoteServer == null) {
+                    var bridge = new PolarAlignLive.Remote.RemoteBridge(this);
+                    remoteServer = new PolarAlignLive.Remote.RemoteServer(bridge.BuildState, bridge.RunCommand,
+                        () => remotePin.ToString(CultureInfo.InvariantCulture));
+                }
+                if (remoteEnabled) {
+                    if (remoteServer.Start(remotePort)) {
+                        string ips = LocalAddresses();
+                        remoteMessage = "Open on your phone (same Wi-Fi): http://" + ips.Replace(" or ", ":" + remotePort + " or http://") + ":" + remotePort + "   PIN " + remotePin;
+                    } else remoteMessage = "Phone access could not start: " + remoteServer.LastError + " Try another port.";
+                } else {
+                    remoteServer.Stop();
+                    remoteMessage = "";
+                }
+            } catch (Exception ex) { remoteMessage = "Phone access error: " + ex.Message; }
+            RaisePropertyChanged(nameof(RemoteToggleText));
+            RaisePropertyChanged(nameof(RemoteInfoText));
+            RaisePropertyChanged(nameof(RemoteEnabled));
         }
 
         public ICommand StartLiveCommand { get; }
@@ -241,6 +304,9 @@ namespace PolarAlignLive {
                     else if (kv[0] == "altunit") altUnit = (int)Math.Max(0, Math.Min(2, v));
                     else if (kv[0] == "azunit") azUnit = (int)Math.Max(0, Math.Min(2, v));
                     else if (kv[0] == "beep") beepOn = v != 0;
+                    else if (kv[0] == "remote") remoteEnabled = v != 0;
+                    else if (kv[0] == "rport") remotePort = (int)Math.Max(1024, Math.Min(65535, v));
+                    else if (kv[0] == "rpin") remotePin = (int)Math.Max(0, Math.Min(999999, v));
                     else if (kv[0] == "altcal2") altCal = v;
                     else if (kv[0] == "azcal2") azCal = v;
                 }
@@ -256,6 +322,9 @@ namespace PolarAlignLive {
                     "crop=" + cropPercent.ToString(CultureInfo.InvariantCulture),
                     "settings=" + (settingsOpen ? "1" : "0"),
                     "beep=" + (beepOn ? "1" : "0"),
+                    "remote=" + (remoteEnabled ? "1" : "0"),
+                    "rport=" + remotePort.ToString(CultureInfo.InvariantCulture),
+                    "rpin=" + remotePin.ToString(CultureInfo.InvariantCulture),
                     "altunit=" + altUnit.ToString(CultureInfo.InvariantCulture),
                     "azunit=" + azUnit.ToString(CultureInfo.InvariantCulture),
                     "altcal2=" + altCal.ToString("R", CultureInfo.InvariantCulture),
@@ -804,6 +873,7 @@ namespace PolarAlignLive {
                     MoveEastArcmin = east;
                     TotalErrorArcmin = total;
                     HasSolution = true;
+                    solveSeq++;
                     Beep();
                     RaisePropertyChanged(nameof(MoveUpText));
                     RaisePropertyChanged(nameof(MoveEastText));
