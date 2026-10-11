@@ -50,10 +50,6 @@ namespace PolarAlignLive.Astro {
             return true;
         }
 
-        /// <summary>
-        /// Plan the capture positions. If the current position can't host the three frames safely, find the nearest
-        /// RA (same Dec, same side of the meridian) that can, and plan a repositioning slew to it first.
-        /// </summary>
         /// <summary>Smallest sky separation between frames that the plugin accepts is 8 deg; require margin.</summary>
         public const double MinSkySepDeg = 10;
 
@@ -87,6 +83,10 @@ namespace PolarAlignLive.Astro {
             return false;
         }
 
+        /// <summary>
+        /// RA-only plan at a fixed Dec. If the current position can't host the three frames safely, find the nearest
+        /// RA (same Dec, same side of the meridian) that can, and plan a repositioning slew to it first.
+        /// </summary>
         private static bool PlanRaOnly(double ra0Deg, double decDeg, double latDeg, double lonEastDeg, DateTime utc,
                                 double stepDeg, double minAlt, double maxAlt, out SlewPlan plan, out string reason) {
             plan = null;
