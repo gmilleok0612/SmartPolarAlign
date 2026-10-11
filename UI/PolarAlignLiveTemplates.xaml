@@ -183,6 +183,7 @@
                     </StackPanel>
                     <Button Content="{Binding AltUnitText}" Command="{Binding CycleAltUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding AzUnitText}" Command="{Binding CycleAzUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
+                    <Button Content="{Binding BeepText}" Command="{Binding ToggleBeepCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
                         <Button Content="Calibrate Adjustment Knobs" Command="{Binding CalibrateKnobsCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="230" Padding="4,2" />
                     </StackPanel>
