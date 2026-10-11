@@ -338,13 +338,13 @@ namespace PolarAlignLive {
         public string AltUnitText => "Alt knob: " + UnitLabel(altUnit);
         public string AzUnitText => "Az knob: " + UnitLabel(azUnit);
 
-        public string AltAdviceText => Advice(MoveUpArcmin, altCal, altUnit);
-        public string AzAdviceText => Advice(MoveEastArcmin, azCal, azUnit);
+        public string AltAdviceText => Advice(MoveUpArcmin, altCal, altUnit, " (altitude knob)");
+        public string AzAdviceText => Advice(MoveEastArcmin, azCal, azUnit, " (LEFT azimuth knob)");
 
-        private string Advice(double needArcmin, double cal, int unit) {
+        private string Advice(double needArcmin, double cal, int unit, string who = "") {
             if (!HasSolution || cal == 0 || Math.Abs(needArcmin) < 0.5) return "";
             double u = needArcmin / cal;
-            return $"\u2248 {Math.Abs(u).ToString("0.0", CultureInfo.InvariantCulture)} {UnitLabel(unit)} {(u > 0 ? "clockwise" : "counter-clockwise")}";
+            return $"\u2248 {Math.Abs(u).ToString("0.0", CultureInfo.InvariantCulture)} {UnitLabel(unit)} {(u > 0 ? "clockwise" : "counter-clockwise")}{who}";
         }
 
         private void RaiseCalText() {
@@ -404,10 +404,7 @@ namespace PolarAlignLive {
             if (!EquipmentReady()) { ShowCalMessage(Status); return; }
             if (axis == null) {
                 // The knob calibration measures how far the polar AXIS moves, so it needs the axis. Find it first, automatically.
-                ShowCalMessage("Finding the polar axis first (the calibration needs it).\n\nThe mount will slew in RA and take 3 frames. Use Stop or ABORT SLEW to cancel.");
                 Status = "Finding the polar axis first for the knob calibration.";
-                await Task.Delay(3000);
-                CalVisible = false;
                 await AutoCaptureCore(true);
                 if (axis == null) {
                     ShowCalMessage("Auto Capture did not finish, so the knob calibration was not started.\n\n" + Status + "\n\nPress Calibrate Adjustment Knobs to try again.");
@@ -435,7 +432,7 @@ namespace PolarAlignLive {
                     double turned = 0, moved = 0;
                     for (int tries = 0; tries < 4; tries++) {
                         turned += step;
-                        CalText = head + (tries == 0 ? "" : "Not enough movement measured.\n\n") + "Move knob " + CalStepText(unit) + " clockwise.";
+                        CalText = head + (tries == 0 ? "" : "Not enough movement measured.\n\n") + "Move the " + (axisId == 1 ? "altitude knob " : "LEFT azimuth knob ") + CalStepText(unit) + " clockwise.";
                         if (!await WaitForCalContinue(ct)) return;
 
                         CalText = head + "Taking frame to determine exact position in the sky after adjustment - please wait.";
