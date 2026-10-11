@@ -21,7 +21,6 @@ namespace PolarAlignLive.Remote {
         private CancellationTokenSource cts;
 
         public string LastError { get; private set; }
-        public bool Running => listener != null;
 
         public RemoteServer(Func<string> getState, Func<string, string, string> runCommand, Func<string> getPin) {
             this.getState = getState;

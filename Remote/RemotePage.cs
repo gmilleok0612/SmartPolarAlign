@@ -338,6 +338,16 @@ namespace PolarAlignLive.Remote {
   }
   document.addEventListener('visibilitychange', setWake);
 
+  // iOS/Android only allow sound after a tap: create/resume the audio context on the first touch of the page.
+  function unlockAudio() {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+    } catch (e) {}
+  }
+  document.addEventListener('touchstart', unlockAudio, { passive: true });
+  document.addEventListener('click', unlockAudio);
+
   // ---------- wiring ----------
   function on(id, fn) { $(id).addEventListener('click', fn); }
   on('bAuto', function () { cmd('autocapture'); });

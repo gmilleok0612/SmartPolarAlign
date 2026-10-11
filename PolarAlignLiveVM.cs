@@ -498,7 +498,6 @@ namespace PolarAlignLive {
         }
 
         private async Task CalibrateKnobs() {
-            if (IsBusy) { ShowCalMessage("Press Stop first (Live or another run is active), then press Calibrate Adjustment Knobs again."); return; }
             if (!EquipmentReady()) { ShowCalMessage(Status); return; }
             if (axis == null) {
                 // The knob calibration measures how far the polar AXIS moves, so it needs the axis. Find it first, automatically.
@@ -506,10 +505,12 @@ namespace PolarAlignLive {
                 ConfirmText = "Calibration is about to begin. It needs to slew the scope. Make sure the cables are clear and the mount is ready to slew.";
                 ConfirmYesText = "CONTINUE";
                 Status = "Waiting for your confirmation before calibration starts.";
+                IsBusy = true;    // blocks Auto Capture / Live / Reset while the warning is up; Stop cancels it
                 ConfirmPending = true;
                 bool go = await WaitForConfirm(cts.Token);
                 ConfirmPending = false;
                 ConfirmYesText = "SLEW";
+                IsBusy = false;
                 if (!go) { Status = "Cancelled. The mount was not moved."; return; }
                 await AutoCaptureCore(true);
                 if (axis == null) {

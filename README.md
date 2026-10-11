@@ -1,7 +1,7 @@
 # Polar Align Live (NINA plugin)
 
 Polar Align Pro style bullseye + arrows, driven by plate solves instead of a compass.
-Source only; NOT compiled (no .NET toolchain was available). NINA interfaces were read from NINA's real source.
+Builds on GitHub Actions (no local .NET toolchain needed); NINA interfaces were read from NINA's real source.
 
 ## Build / install
 1. Open `PolarAlignLive.csproj`, pin the `NINA.*` package versions to your installed NINA (currently wildcard `3.*`).
@@ -10,12 +10,17 @@ Source only; NOT compiled (no .NET toolchain was available). NINA interfaces wer
 
 ## Use
 1. Connect camera + mount. Set up plate solver in NINA options. Mount tracking on.
-2. Point anywhere solvable. Polaris is NOT needed. Capture Frame (1).
-3. Rotate RA only (>= ~20 deg, 40+ is better; don't touch Dec). Capture Frame (2).
-4. Rotate RA again (different position). Capture Frame (3). The plugin derives the RA axis and checks it.
-5. Start Live. Adjust the mount's alt/az bolts until both arrows read OK. Dot = your RA axis, bullseye = pole of date.
+2. Point anywhere solvable. Polaris is NOT needed. Press Auto Capture: after your confirmation the mount slews in RA only
+   and takes three frames; the plugin derives the RA axis and checks it.
+3. (Optional) Settings > pick each knob's unit (tics / turns / degrees) > Calibrate Adjustment Knobs and follow the window.
+4. Start Live. Adjust the mount's alt/az bolts until both arrows read OK. Dot = your RA axis, bullseye = pole of date.
    Arrows/text say which way to move the AXIS (raise/lower, swing east/west facing north).
-6. Stop.
+5. Stop. When the error is under 3' the panel says "ALIGNMENT GOOD ENOUGH FOR GUIDING"; under 1' it says "ALIGNMENT EXCELLENT".
+
+## Phone access (optional)
+Settings > "Phone access: On". The plugin runs a small web server (default port 5050, PIN shown in Settings). On a phone on the same
+Wi-Fi open `http://<NINA PC IP>:5050`, enter the PIN, and use the same buttons, bullseye and calibration as the panel.
+Allow the port through Windows Firewall. Local network only.
 
 ## How it works
 - Each solve gives center RA/Dec + position angle. Three frames at three RA positions give the RA axis
@@ -32,7 +37,7 @@ Source only; NOT compiled (no .NET toolchain was available). NINA interfaces wer
 - Northern hemisphere only. No refraction correction. Needs profile latitude/longitude correct and PC clock correct.
 - Live rate = exposure + solve time per frame (seconds, not video rate).
 - Dec must not move between frames 1-3 (rejected if mount reports >0.5 deg Dec change).
-- Un-compiled: expect possible small compile fixes. Settings are not persisted.
+- Settings (including knob calibration) are saved in %LOCALAPPDATA%\NINA\PolarAlignLive.auto.settings.
 
 ## No local build tools? Build on GitHub (free)
 1. Create a private GitHub repo, upload the contents of this folder (including `.github/`).
