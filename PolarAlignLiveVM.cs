@@ -166,6 +166,7 @@ namespace PolarAlignLive {
             if (disp == null) return;
             int tries = 0;
             bool visibilitySynced = false;
+            bool recovered = false;
             var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, disp) {
                 Interval = TimeSpan.FromSeconds(2)
             };
@@ -177,7 +178,8 @@ namespace PolarAlignLive {
                     if (IsVisible != shown.Value) IsVisible = shown.Value;
                     visibilitySynced = true;
                 }
-                if ((visibilitySynced && iconSet) || tries >= 8) timer.Stop();
+                if (!recovered && maximizer.RecoverHidden(this) >= 0) recovered = true;
+                if ((visibilitySynced && iconSet && recovered) || tries >= 30) timer.Stop();
             };
             timer.Start();
         }
@@ -402,13 +404,11 @@ namespace PolarAlignLive {
             if (!EquipmentReady()) { ShowCalMessage(Status); return; }
             if (axis == null) {
                 // The knob calibration measures how far the polar AXIS moves, so it needs the axis. Find it first, automatically.
-                ShowCalMessage("Knob calibration needs to know where the polar axis points, so Auto Capture will run first.\n\n" +
-                               "The mount will slew in RA and take 3 frames. You will be asked to confirm the slew with SLEW before anything moves. " +
-                               "The knob calibration starts right after.");
-                Status = "Running Auto Capture first: the knob calibration needs the polar axis.";
-                await Task.Delay(5000);
+                ShowCalMessage("Finding the polar axis first (the calibration needs it).\n\nThe mount will slew in RA and take 3 frames. Use Stop or ABORT SLEW to cancel.");
+                Status = "Finding the polar axis first for the knob calibration.";
+                await Task.Delay(3000);
                 CalVisible = false;
-                await AutoCapture();
+                await AutoCaptureCore(true);
                 if (axis == null) {
                     ShowCalMessage("Auto Capture did not finish, so the knob calibration was not started.\n\n" + Status + "\n\nPress Calibrate Adjustment Knobs to try again.");
                     return;
@@ -429,6 +429,7 @@ namespace PolarAlignLive {
 
                     CalText = head + "Taking frame to determine exact position in the sky - please wait.";
                     var start = await MeasureOnce(ct);
+                    NINA.Core.Utility.Logger.Info($"PolarAlignLive calibrate axis {axisId}: start ok={start.ok} up={start.up:0.00} east={start.east:0.00}");
                     if (!start.ok) { finalMsg = "Calibration stopped: the plate solve failed. Check focus and exposure, then try again."; return; }
 
                     double turned = 0, moved = 0;
@@ -441,15 +442,17 @@ namespace PolarAlignLive {
                         var end = await MeasureOnce(ct);
                         if (!end.ok) { finalMsg = "Calibration stopped: the plate solve failed. Check focus and exposure, then try again."; return; }
                         moved = axisId == 1 ? start.up - end.up : start.east - end.east;   // how far the axis actually moved (arcmin)
+                        NINA.Core.Utility.Logger.Info($"PolarAlignLive calibrate axis {axisId}: try {tries} end ok={end.ok} up={end.up:0.00} east={end.east:0.00} moved={moved:0.00} turned={turned}");
                         if (Math.Abs(moved) >= 1.0) break;
                     }
                     if (Math.Abs(moved) < 1.0) { finalMsg = "Calibration stopped: the axis did not move. Check that you turned the right knob."; return; }
 
                     double k = moved / turned;
                     if (axisId == 1) altCal = k; else azCal = k;
+                    NINA.Core.Utility.Logger.Info($"PolarAlignLive calibrate axis {axisId}: {k:0.000} arcmin per {UnitLabel(unit)}");
                     SaveAutoSettings(); RaiseCalText();
                 }
-                finalMsg = "Start Live View to view adjustments to center the pole.";
+                finalMsg = $"Calibrated:\nAltitude {Math.Abs(altCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(altUnit).TrimEnd('s')}, azimuth {Math.Abs(azCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(azUnit).TrimEnd('s')}.\n\nStart Live View to view adjustments to center the pole.";
                 AfterCalChange("Knobs calibrated. Start Live View to see how far to turn each knob.");
             } catch (OperationCanceledException) {
                 Status = "Calibration cancelled.";
@@ -604,7 +607,11 @@ namespace PolarAlignLive {
             return $"{hh:00}h{m:00.0}m";
         }
 
-        private async Task AutoCapture() {
+        private Task AutoCapture() => AutoCaptureCore(false);
+
+        /// <summary>skipConfirm = true when the knob calibration runs Auto Capture on the user's behalf (the user already asked
+        /// for the calibration; Stop / ABORT SLEW remain available).</summary>
+        private async Task AutoCaptureCore(bool skipConfirm) {
             if (!EquipmentReady()) return;
             var info = telescopeMediator.GetInfo();
             if (info.AtPark) { Status = "Mount is parked. Unpark first."; return; }
@@ -638,11 +645,13 @@ namespace PolarAlignLive {
                               (plan.NeedsReposition ? "The current position is not suitable for the capture sequence, so it will first move to the safe start before any image is taken. " : "") +
                               (trackingWasOff ? "Mount tracking is off and will be switched ON first. " : "") +
                               "Check that cables, scope and pier are clear. SLEW to proceed, CANCEL to stop with no movement.";
-                Status = "Waiting for your confirmation before any slew.";
-                ConfirmPending = true;
-                bool ok = await WaitForConfirm(ct);
-                ConfirmPending = false;
-                if (!ok) { Status = "Cancelled. The mount was not moved."; return; }
+                if (!skipConfirm) {
+                    Status = "Waiting for your confirmation before any slew.";
+                    ConfirmPending = true;
+                    bool ok = await WaitForConfirm(ct);
+                    ConfirmPending = false;
+                    if (!ok) { Status = "Cancelled. The mount was not moved."; return; }
+                }
 
                 if (trackingWasOff) {
                     Status = "Turning mount tracking on...";
