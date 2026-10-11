@@ -17,12 +17,7 @@ namespace PolarAlignLive.UI {
     /// </summary>
     internal sealed class PanelMaximizer {
 
-        private sealed class SavedSize { public object Element; public GridLength? Width; public GridLength? Height; }
 
-        private readonly List<object> hidden = new List<object>();
-        private readonly List<object> wasSelected = new List<object>();
-        private readonly List<SavedSize> sizes = new List<SavedSize>();
-        private object ours;
 
         public bool IsMaximized { get; private set; }
 
@@ -71,6 +66,7 @@ namespace PolarAlignLive.UI {
                     int n = RecoverHidden(content);
                     if (n > 0) return $"Brought back {n} panel(s) that an earlier Maximize had hidden. Press Maximize again to maximize.";
                 }
+                if (IsMaximized && floated != null && !(Get(floated, "IsFloating") is bool f2 && f2)) { floated = null; floatWindow = null; IsMaximized = false; }
                 return IsMaximized ? Restore() : Maximize(content);
             } catch (Exception ex) {
                 Logger.Info("PolarAlignLive maximize failed: " + ex);
@@ -176,69 +172,59 @@ namespace PolarAlignLive.UI {
             } catch (Exception ex) { Logger.Info("PolarAlignLive activate failed: " + ex.Message); }
         }
 
+        private object floated;          // the LayoutAnchorable we floated
+        private Window floatWindow;      // its floating window
+
+        private static Window FindFloatWindow(object anchorable) {
+            foreach (Window w in Application.Current.Windows) {
+                if (!w.GetType().Name.Contains("FloatingWindow")) continue;
+                object model;
+                try { model = Get(w, "Model"); } catch { continue; }
+                if (model == null) continue;
+                if (Descend(model).Any(e => ReferenceEquals(e, anchorable))) return w;
+            }
+            return null;
+        }
+
+        /// <summary>Maximize = float this panel into its own window and maximize that window. Nothing else in NINA is touched.</summary>
         private string Maximize(object content) {
-            if (!Find(content, out var mine, out var all, out var diag)) {
+            if (!Find(content, out var mine, out _, out var diag)) {
                 Logger.Info("PolarAlignLive maximize: " + diag);
                 return "Maximize: could not find this panel in NINA's dock. " + diag;
             }
-
-            ours = mine;
-            hidden.Clear(); wasSelected.Clear(); sizes.Clear();
-
-            // 1) Hide every other visible tool panel, remembering which were the selected tab in their group.
-            foreach (var a in all) {
-                if (ReferenceEquals(a, mine)) continue;
-                if (!(Get(a, "IsVisible") is bool vis) || !vis) continue;
-                hidden.Add(a);
-                if (Get(a, "IsSelected") is bool sel && sel) wasSelected.Add(a);
-            }
-            if (hidden.Count == 0) {
-                return "Nothing to maximize: no other panels are open here. Open some from NINA's top bar first, then press Maximize.";
-            }
-            try {
-                System.IO.File.WriteAllLines(HiddenFile, hidden.Select(a => Get(a, "Title") as string).Where(t => !string.IsNullOrEmpty(t)));
-            } catch { }
             HookExit();
-            foreach (var a in hidden) Call(a, "Hide");
-
-            // 2) Give our pane and every parent most of the space (star sizes are relative to siblings).
-            var big = new GridLength(1000, GridUnitType.Star);
-            object p = mine;
-            while (p != null) {
-                var wProp = p.GetType().GetProperty("DockWidth");
-                var hProp = p.GetType().GetProperty("DockHeight");
-                if (wProp != null && hProp != null && wProp.CanWrite && hProp.CanWrite) {
-                    var s = new SavedSize { Element = p, Width = (GridLength)wProp.GetValue(p), Height = (GridLength)hProp.GetValue(p) };
-                    sizes.Add(s);
-                    wProp.SetValue(p, big);
-                    hProp.SetValue(p, big);
-                }
-                p = Get(p, "Parent");
-            }
-
-            Set(mine, "IsSelected", true);
-            Set(mine, "IsActive", true);
+            if (!(Get(mine, "IsFloating") is bool fl && fl)) Call(mine, "Float");
+            floated = mine;
             IsMaximized = true;
-            return $"Maximized (hid {hidden.Count} other panel(s)). Press Restore to put them back.";
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            int tries = 0;
+            timer.Tick += (s, e) => {
+                tries++;
+                try {
+                    floatWindow = FindFloatWindow(mine);
+                    if (floatWindow != null) {
+                        floatWindow.WindowState = WindowState.Maximized;
+                        Logger.Info("PolarAlignLive maximized floating window " + floatWindow.GetType().Name);
+                        timer.Stop();
+                    } else if (tries >= 20) {
+                        Logger.Info("PolarAlignLive maximize: floating window not found");
+                        timer.Stop();
+                    }
+                } catch (Exception ex) { Logger.Info("PolarAlignLive maximize window failed: " + ex.Message); timer.Stop(); }
+            };
+            timer.Start();
+            return "Maximized (panel opened in its own full-size window). Press Restore to dock it back.";
         }
 
         private string Restore() {
-            // Show the hidden panels first (AvalonDock puts each back where it was), then restore sizes.
-            foreach (var a in hidden) {
-                try { Call(a, "Show"); } catch (Exception ex) { Logger.Info("PolarAlignLive restore Show failed: " + ex.Message); }
-            }
-            foreach (var s in sizes) {
-                try {
-                    if (s.Width.HasValue) Set(s.Element, "DockWidth", s.Width.Value);
-                    if (s.Height.HasValue) Set(s.Element, "DockHeight", s.Height.Value);
-                } catch (Exception ex) { Logger.Info("PolarAlignLive restore size failed: " + ex.Message); }
-            }
-            foreach (var a in wasSelected) { try { Set(a, "IsSelected", true); } catch { } }
-            int n = hidden.Count;
-            try { System.IO.File.Delete(HiddenFile); } catch { }
-            hidden.Clear(); wasSelected.Clear(); sizes.Clear();
+            try {
+                if (floatWindow != null) { try { floatWindow.WindowState = WindowState.Normal; } catch { } }
+                if (floated != null && Get(floated, "IsFloating") is bool fl && fl) Call(floated, "Dock");
+                if (floated != null) { Set(floated, "IsSelected", true); Set(floated, "IsActive", true); }
+            } catch (Exception ex) { Logger.Info("PolarAlignLive restore failed: " + ex.Message); }
+            floated = null; floatWindow = null;
             IsMaximized = false;
-            return $"Restored ({n} panel(s) shown again).";
+            return "Restored (panel docked back).";
         }
     }
 }
