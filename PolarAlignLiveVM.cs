@@ -80,6 +80,7 @@ namespace PolarAlignLive {
                 } catch (Exception ex) { Status = FriendlyError(ex); }
             });
             AbortSlewCommand = new RelayCommand(AbortSlew);
+            ToggleBeepCommand = new RelayCommand(() => { beepOn = !beepOn; SaveAutoSettings(); RaisePropertyChanged(nameof(BeepText)); if (beepOn) Beep(); });
             CycleAltUnitCommand = new RelayCommand(() => { altUnit = (altUnit + 1) % 3; altCal = 0; AfterCalChange("Alt knob unit changed; run Calibrate Adjustment Knobs again."); });
             CycleAzUnitCommand = new RelayCommand(() => { azUnit = (azUnit + 1) % 3; azCal = 0; AfterCalChange("Az knob unit changed; run Calibrate Adjustment Knobs again."); });
             CalibrateKnobsCommand = new AsyncRelayCommand(CalibrateKnobsGuarded);
@@ -117,6 +118,15 @@ namespace PolarAlignLive {
         public ICommand CycleAltUnitCommand { get; }
         public ICommand CycleAzUnitCommand { get; }
         public ICommand CalibrateKnobsCommand { get; }
+        public ICommand ToggleBeepCommand { get; }
+
+        private bool beepOn = true;
+        public string BeepText => beepOn ? "Live beep: On" : "Live beep: Off";
+        /// <summary>Short beep so the user knows Live View just produced new advice.</summary>
+        private void Beep() {
+            if (!beepOn) return;
+            System.Threading.Tasks.Task.Run(() => { try { Console.Beep(880, 120); } catch { try { System.Media.SystemSounds.Beep.Play(); } catch { } } });
+        }
         public ICommand CalContinueCommand { get; }
         public ICommand CalCancelCommand { get; }
         public ICommand ToggleSettingsCommand { get; }
@@ -230,6 +240,7 @@ namespace PolarAlignLive {
                     else if (kv[0] == "settings") settingsOpen = v == 1;
                     else if (kv[0] == "altunit") altUnit = (int)Math.Max(0, Math.Min(2, v));
                     else if (kv[0] == "azunit") azUnit = (int)Math.Max(0, Math.Min(2, v));
+                    else if (kv[0] == "beep") beepOn = v != 0;
                     else if (kv[0] == "altcal2") altCal = v;
                     else if (kv[0] == "azcal2") azCal = v;
                 }
@@ -244,6 +255,7 @@ namespace PolarAlignLive {
                     "maxalt=" + maxAltDeg.ToString(CultureInfo.InvariantCulture),
                     "crop=" + cropPercent.ToString(CultureInfo.InvariantCulture),
                     "settings=" + (settingsOpen ? "1" : "0"),
+                    "beep=" + (beepOn ? "1" : "0"),
                     "altunit=" + altUnit.ToString(CultureInfo.InvariantCulture),
                     "azunit=" + azUnit.ToString(CultureInfo.InvariantCulture),
                     "altcal2=" + altCal.ToString("R", CultureInfo.InvariantCulture),
@@ -792,6 +804,7 @@ namespace PolarAlignLive {
                     MoveEastArcmin = east;
                     TotalErrorArcmin = total;
                     HasSolution = true;
+                    Beep();
                     RaisePropertyChanged(nameof(MoveUpText));
                     RaisePropertyChanged(nameof(MoveEastText));
                     RaisePropertyChanged(nameof(TotalErrorText));
