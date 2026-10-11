@@ -26,8 +26,51 @@ namespace PolarAlignLive.UI {
 
         public bool IsMaximized { get; private set; }
 
+        // Titles of the panels hidden by Maximize are kept in a small file. NINA saves its dock layout when it exits, so
+        // quitting while maximized would otherwise leave those panels hidden for good.
+        private static string HiddenFile => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA", "PolarAlignLive.hiddenpanels");
+
+        private bool exitHooked;
+
+        private void HookExit() {
+            if (exitHooked) return;
+            try {
+                var w = Application.Current?.MainWindow;
+                if (w == null) return;
+                w.Closing += (s, e) => { try { if (IsMaximized) Restore(); } catch { } };
+                exitHooked = true;
+            } catch { }
+        }
+
+        /// <summary>Re-shows panels that an earlier Maximize hid and never restored (for example NINA was closed while maximized).
+        /// Returns -1 if the dock is not available yet, otherwise how many panels were shown.</summary>
+        public int RecoverHidden(object content) {
+            try {
+                if (IsMaximized) return 0;
+                if (!System.IO.File.Exists(HiddenFile)) return Find(content, out _, out _, out _) ? 0 : -1;
+                if (!Find(content, out var mine, out var all, out _)) return -1;
+                var titles = new HashSet<string>(System.IO.File.ReadAllLines(HiddenFile).Where(l => l.Length > 0));
+                int n = 0;
+                foreach (var a in all) {
+                    if (ReferenceEquals(a, mine)) continue;
+                    var t = Get(a, "Title") as string;
+                    if (t == null || !titles.Contains(t)) continue;
+                    if (Get(a, "IsVisible") is bool v && v) continue;
+                    try { Call(a, "Show"); n++; } catch (Exception ex) { Logger.Info("PolarAlignLive recover Show failed: " + ex.Message); }
+                }
+                try { System.IO.File.Delete(HiddenFile); } catch { }
+                Logger.Info("PolarAlignLive recovered " + n + " panel(s) hidden by an earlier Maximize.");
+                return n;
+            } catch (Exception ex) { Logger.Info("PolarAlignLive recover failed: " + ex.Message); return -1; }
+        }
+
         public string Toggle(object content) {
             try {
+                if (!IsMaximized && System.IO.File.Exists(HiddenFile)) {
+                    int n = RecoverHidden(content);
+                    if (n > 0) return $"Brought back {n} panel(s) that an earlier Maximize had hidden. Press Maximize again to maximize.";
+                }
                 return IsMaximized ? Restore() : Maximize(content);
             } catch (Exception ex) {
                 Logger.Info("PolarAlignLive maximize failed: " + ex);
@@ -149,6 +192,13 @@ namespace PolarAlignLive.UI {
                 hidden.Add(a);
                 if (Get(a, "IsSelected") is bool sel && sel) wasSelected.Add(a);
             }
+            if (hidden.Count == 0) {
+                return "Nothing to maximize: no other panels are open here. Open some from NINA's top bar first, then press Maximize.";
+            }
+            try {
+                System.IO.File.WriteAllLines(HiddenFile, hidden.Select(a => Get(a, "Title") as string).Where(t => !string.IsNullOrEmpty(t)));
+            } catch { }
+            HookExit();
             foreach (var a in hidden) Call(a, "Hide");
 
             // 2) Give our pane and every parent most of the space (star sizes are relative to siblings).
@@ -185,6 +235,7 @@ namespace PolarAlignLive.UI {
             }
             foreach (var a in wasSelected) { try { Set(a, "IsSelected", true); } catch { } }
             int n = hidden.Count;
+            try { System.IO.File.Delete(HiddenFile); } catch { }
             hidden.Clear(); wasSelected.Clear(); sizes.Clear();
             IsMaximized = false;
             return $"Restored ({n} panel(s) shown again).";
