@@ -14,7 +14,7 @@ Builds on GitHub Actions (no local .NET toolchain needed); NINA interfaces were 
    and takes three frames; the plugin derives the RA axis and checks it.
 3. (Optional) Settings > pick each knob's unit (tics / turns / degrees) > Calibrate Adjustment Knobs and follow the window.
 4. Start Live. Adjust the mount's alt/az bolts until both arrows read OK. Dot = your RA axis, bullseye = pole of date.
-   Arrows/text say which way to move the AXIS (raise/lower, swing east/west facing north).
+   Arrows/text say which way to move the AXIS (raise/lower, swing east/west, as seen facing the pole - facing south in the southern hemisphere, where the bullseye is mirrored so east is on the left).
 5. Stop. When the error is under 3' the panel says "ALIGNMENT GOOD ENOUGH FOR GUIDING"; under 1' it says "ALIGNMENT EXCELLENT".
 
 ## Phone access (optional)
@@ -34,12 +34,12 @@ Allow the port through Windows Firewall. Local network only.
 - Image mirroring cancels out and is irrelevant.
 
 ## Known limits
-- Northern hemisphere only. Needs profile latitude/longitude correct and PC clock correct.
+- Works in both hemispheres (the sign of the NINA profile latitude decides: negative = south celestial pole). Needs profile latitude/longitude correct and PC clock correct. The southern hemisphere has been checked by calculation only, not yet on a southern sky - testers welcome.
 - Live rate = exposure + solve time per frame (seconds, not video rate).
 - Dec must not move between frames 1-3 (rejected if mount reports >0.5 deg Dec change).
 - Pause s (Settings, PC and phone): seconds to wait after each Live update before the next exposure (default 5, range 0-60), so you have time to turn the knobs. 0 = continuous.
 - Live beep and Live flash (Settings): each new Live solution beeps and briefly brightens the advice text, on the PC and on the phone page. Both can be turned off in Settings; the phone page has its own beep switch too.
-- Refraction: Settings > "Refraction: On" (default) aims at the apparent pole, which sits about 1' above the true pole at mid-northern latitudes (the bend of starlight by the atmosphere, scaled for your site elevation). Turn it off to aim at the true pole.
+- Refraction: Settings > "Refraction: On" (default) aims at the apparent pole, which sits about 1' above the true pole at mid latitudes (the bend of starlight by the atmosphere, scaled for your site elevation). Turn it off to aim at the true pole.
 - Settings (including knob calibration) are saved in %LOCALAPPDATA%\NINA\PolarAlignLive.auto.settings.
 
 ## No local build tools? Build on GitHub (free)

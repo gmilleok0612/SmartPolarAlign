@@ -197,6 +197,9 @@ namespace PolarAlignLive {
             } catch { AdviceFlash = false; }
         }
 
+        /// <summary>True when the profile latitude is south of the equator (the mount then aligns on the south celestial pole).</summary>
+        public bool SouthHemisphere { get { try { return profileService.ActiveProfile.AstrometrySettings.Latitude < 0; } catch { return false; } } }
+
         private bool refrOn = true;
         public string RefractionText => refrOn ? "Refraction: On" : "Refraction: Off";
         public ICommand ToggleRefractionCommand { get; private set; }
@@ -210,7 +213,7 @@ namespace PolarAlignLive {
                 if (p != null) elev = Convert.ToDouble(p.GetValue(profileService.ActiveProfile.AstrometrySettings));
             } catch { }
             if (double.IsNaN(elev) || elev < -400 || elev > 6000) elev = 0;
-            return PolarMath.RefractionArcmin(latDeg, elev);
+            return PolarMath.RefractionArcmin(Math.Abs(latDeg), elev);   // altitude of the pole = |latitude| in either hemisphere
         }
 
         private bool beepOn = true;
@@ -750,7 +753,7 @@ namespace PolarAlignLive {
                 return true;
             }
 
-            axis = PolarMath.SolveAxis(frames);
+            axis = PolarMath.SolveAxis(frames, SouthHemisphere);
             bool good = axis.ResidualDeg < 0.1 && axis.RotationDeg >= 15 &&
                         (double.IsNaN(axis.RejectedResidualDeg) || axis.RejectedResidualDeg > 3 * axis.ResidualDeg);
             AxisQualityText = $"Axis check: residual {axis.ResidualDeg * 60:0.0}′, rotation {axis.RotationDeg:0}°, PA sign {(axis.PaSign > 0 ? "+" : "-")}" +
@@ -949,6 +952,7 @@ namespace PolarAlignLive {
                     MoveEastArcmin = east;
                     TotalErrorArcmin = total;
                     HasSolution = true;
+                    RaisePropertyChanged(nameof(SouthHemisphere));
                     solveSeq++;
                     Beep();
                     Flash();
