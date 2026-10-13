@@ -53,6 +53,12 @@ namespace PolarAlignLive.Astro {
         /// <summary>Smallest sky separation between frames that the plugin accepts is 8 deg; require margin.</summary>
         public const double MinSkySepDeg = 10;
 
+        /// <summary>Extra altitude headroom (deg) preferred for a repositioned start; relaxed to 0 if nothing fits.</summary>
+        private static readonly double[] Margins = { 15, 8, 0 };
+
+        private static double EffectiveMin(double minAlt, double maxAlt, double margin) =>
+            Math.Max(minAlt, Math.Min(minAlt + margin, maxAlt - 15));
+
         /// <summary>
         /// Top-level planner. Near the pole an RA-only move barely moves the camera (sky motion = step * cos Dec), so the
         /// three frames would be nearly identical. In that case (or if no RA-only plan is safe) the start position also
@@ -70,13 +76,17 @@ namespace PolarAlignLive.Astro {
             }
             if (!enoughMotion) firstReason = "Dec " + decDeg.ToString("0") + "° is too close to the pole for RA-only moves";
 
-            foreach (double d in new[] { 30.0, 20.0, 40.0, 10.0, 50.0, 0.0 }) {
-                if (stepDeg * Math.Cos(d * PolarMath.D2R) < MinSkySepDeg) continue;
-                if (PlanRaOnly(ra0Deg, d, latDeg, lonEastDeg, utc, stepDeg, minAlt, maxAlt, out plan, out _)) {
-                    plan.NeedsReposition = true;   // Dec differs from the current position: always a confirmed safe-start slew
-                    reason = null;
-                    return true;
+            foreach (double margin in Margins) {
+                double effMin = EffectiveMin(minAlt, maxAlt, margin);
+                foreach (double d in new[] { 30.0, 20.0, 40.0, 10.0, 50.0, 0.0 }) {
+                    if (stepDeg * Math.Cos(d * PolarMath.D2R) < MinSkySepDeg) continue;
+                    if (PlanRaOnly(ra0Deg, d, latDeg, lonEastDeg, utc, stepDeg, effMin, maxAlt, out plan, out _)) {
+                        plan.NeedsReposition = true;   // Dec differs from the current position: always a confirmed safe-start slew
+                        reason = null;
+                        return true;
+                    }
                 }
+                if (margin == 0) break;
             }
             plan = null;
             reason = firstReason ?? "no safe position found";
@@ -98,16 +108,21 @@ namespace PolarAlignLive.Astro {
             }
 
             int away = haSign > 0 ? -1 : +1;
-            for (int d = 1; d <= 179; d++) {
-                foreach (int dir in new[] { away, -away }) {
-                    double rs = ra0Deg + dir * d;
-                    rs %= 360.0; if (rs < 0) rs += 360.0;
-                    // The repositioning move itself must keep the same hour-angle sign.
-                    if (!PlanFrom(rs, decDeg, latDeg, lonEastDeg, utc, haSign, stepDeg, minAlt, maxAlt, out var p, out _)) continue;
-                    p.StartRaDeg = rs; p.NeedsReposition = true;
-                    plan = p; reason = null;
-                    return true;
+            // Prefer a start with altitude headroom: try a comfortable minimum first, then relax to the user's limit.
+            foreach (double margin in Margins) {
+                double effMin = EffectiveMin(minAlt, maxAlt, margin);
+                for (int d = 1; d <= 179; d++) {
+                    foreach (int dir in new[] { away, -away }) {
+                        double rs = ra0Deg + dir * d;
+                        rs %= 360.0; if (rs < 0) rs += 360.0;
+                        // The repositioning move itself must keep the same hour-angle sign.
+                        if (!PlanFrom(rs, decDeg, latDeg, lonEastDeg, utc, haSign, stepDeg, effMin, maxAlt, out var p, out _)) continue;
+                        p.StartRaDeg = rs; p.NeedsReposition = true;
+                        plan = p; reason = null;
+                        return true;
+                    }
                 }
+                if (margin == 0) break;
             }
             reason = "no safe RA at this Dec on this side of the meridian (" + r0 + "). Try a Dec nearer the celestial equator or lower the zenith limit";
             return false;
