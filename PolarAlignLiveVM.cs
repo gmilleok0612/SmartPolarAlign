@@ -72,13 +72,6 @@ namespace PolarAlignLive {
             StopCommand = new RelayCommand(Stop, () => IsBusy);
             ResetCommand = new RelayCommand(Reset, () => !IsBusy);
             AutoCaptureCommand = new AsyncRelayCommand(AutoCapture, () => !IsBusy && axis == null);
-            TrackingOnCommand = new RelayCommand(() => {
-                try {
-                    if (!telescopeMediator.GetInfo().Connected) { Status = "Connect the mount first (Equipment tab)."; return; }
-                    bool ok = telescopeMediator.SetTrackingEnabled(true);
-                    Status = ok ? "Tracking turned on." : "The mount did not accept the tracking command. Turn tracking on at the mount.";
-                } catch (Exception ex) { Status = FriendlyError(ex); }
-            });
             AbortSlewCommand = new RelayCommand(AbortSlew);
             ToggleFlashCommand = new RelayCommand(() => { flashOn = !flashOn; SaveAutoSettings(); RaisePropertyChanged(nameof(FlashText)); if (flashOn) Flash(); });
             ToggleRefractionCommand = new RelayCommand(() => { refrOn = !refrOn; SaveAutoSettings(); RaisePropertyChanged(nameof(RefractionText)); });
@@ -178,7 +171,6 @@ namespace PolarAlignLive {
         public ICommand StopCommand { get; }
         public ICommand ResetCommand { get; }
         public ICommand AutoCaptureCommand { get; }
-        public ICommand TrackingOnCommand { get; }
         public ICommand AbortSlewCommand { get; }
         public ICommand CycleAltUnitCommand { get; }
         public ICommand CycleAzUnitCommand { get; }
@@ -540,7 +532,7 @@ namespace PolarAlignLive {
         }
 
         private async Task CalibrateKnobs() {
-            if (!EquipmentReady()) { ShowCalMessage(Status); return; }
+            if (!EquipmentReady() || !await EnsureTracking()) { ShowCalMessage(Status); return; }
             if (axis == null) {
                 // The knob calibration measures how far the polar AXIS moves, so it needs the axis. Find it first, automatically.
                 cts = new CancellationTokenSource();
@@ -695,6 +687,20 @@ namespace PolarAlignLive {
                 return false;
             }
             return true;
+        }
+
+        /// <summary>Turns mount tracking on if it is off (no separate button needed). Returns false only if the mount refuses.</summary>
+        private async Task<bool> EnsureTracking() {
+            try {
+                var info = telescopeMediator.GetInfo();
+                if (info.AtPark || info.TrackingEnabled) return true;
+                Status = "Turning mount tracking on...";
+                telescopeMediator.SetTrackingEnabled(true);
+                await Task.Delay(1500);
+                if (telescopeMediator.GetInfo().TrackingEnabled) return true;
+                Status = "Could not turn tracking on. Enable it on the mount, then try again.";
+                return false;
+            } catch (Exception ex) { Status = FriendlyError(ex); return false; }
         }
 
         private static string FriendlyError(Exception ex) {
@@ -878,7 +884,7 @@ namespace PolarAlignLive {
 
         private async Task StartLive() {
             if (axis == null) return;
-            if (!EquipmentReady()) return;
+            if (!EquipmentReady() || !await EnsureTracking()) return;
             cts = new CancellationTokenSource();
             var ct = cts.Token;
             IsBusy = true;
@@ -942,7 +948,8 @@ namespace PolarAlignLive {
                 }
             } catch (OperationCanceledException) {
                 try { cameraMediator.AbortExposure(); } catch { }
-                Status = "Stopped.";
+                Status = "Live is stopped. Make your adjustment, then press Start Live to continue.";
+                Instructions = "Live is stopped. The axis solution is kept - press Start Live to resume.";
             } catch (Exception ex) {
                 try { cameraMediator.AbortExposure(); } catch { }
                 Status = FriendlyError(ex);
