@@ -182,6 +182,10 @@
                         <TextBlock Text="Max alt" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
                         <TextBox Width="40" Style="{StaticResource PalTextBox}" Text="{Binding MaxAltDeg, UpdateSourceTrigger=LostFocus}" />
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="3,3,10,3" ToolTip="Seconds to wait after each Live update before the next exposure (0-60), so you have time to adjust.">
+                        <TextBlock Text="Pause s" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Width="40" Style="{StaticResource PalTextBox}" Text="{Binding PauseSeconds, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
                         <TextBlock Text="Crop" Style="{StaticResource PalLabel}" VerticalAlignment="Center" Margin="0,0,4,0" />
                         <RadioButton GroupName="PalCrop" Content="100%" Style="{StaticResource PalChoice}" MinWidth="0" Width="56" IsChecked="{Binding Crop100, Mode=TwoWay}" />
