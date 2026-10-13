@@ -184,6 +184,7 @@
                     <Button Content="{Binding AltUnitText}" Command="{Binding CycleAltUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding AzUnitText}" Command="{Binding CycleAzUnitCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding BeepText}" Command="{Binding ToggleBeepCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
+                    <Button Content="{Binding FlashText}" Command="{Binding ToggleFlashCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding RefractionText}" Command="{Binding ToggleRefractionCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="150" Padding="4,2" Margin="3,3,10,3" />
                     <Button Content="{Binding RemoteToggleText}" Command="{Binding ToggleRemoteCommand}" Style="{StaticResource PalButton}" MinWidth="0" Width="180" Padding="4,2" Margin="3,3,10,3" />
                     <StackPanel Orientation="Horizontal" Margin="3,3,10,3">
@@ -263,20 +264,24 @@
                                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
                             <StackPanel Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,0,0,0" IsHitTestVisible="False">
                                 <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalLabel}" FontSize="20" FontWeight="Bold" />
-                                <TextBlock Text="{Binding AltAdviceText}" FontSize="15" FontWeight="Bold" Foreground="{Binding Theme.TextBrush}">
+                                <TextBlock Text="{Binding AltAdviceText}" FontSize="15" FontWeight="Bold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
                                             <Style.Triggers>
+                                                <DataTrigger Binding="{Binding AdviceFlash}" Value="True"><Setter Property="Foreground" Value="{Binding Theme.FlashBrush}" /></DataTrigger>
                                                 <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
                                             </Style.Triggers>
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
                                 <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalLabel}" FontSize="20" FontWeight="Bold" />
-                                <TextBlock Text="{Binding AzAdviceText}" FontSize="15" FontWeight="Bold" Foreground="{Binding Theme.TextBrush}">
+                                <TextBlock Text="{Binding AzAdviceText}" FontSize="15" FontWeight="Bold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
                                             <Style.Triggers>
+                                                <DataTrigger Binding="{Binding AdviceFlash}" Value="True"><Setter Property="Foreground" Value="{Binding Theme.FlashBrush}" /></DataTrigger>
                                                 <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
                                             </Style.Triggers>
                                         </Style>
