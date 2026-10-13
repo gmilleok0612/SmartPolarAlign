@@ -332,6 +332,7 @@ namespace PolarAlignLive {
                 if (!System.IO.File.Exists(AutoSettingsPath)) return;
                 foreach (var line in System.IO.File.ReadAllLines(AutoSettingsPath)) {
                     var kv = line.Split('=');
+                    if (kv.Length == 2 && kv[0] == "calmount") { calMount = kv[1]; continue; }
                     if (kv.Length != 2 || !double.TryParse(kv[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) continue;
                     if (kv[0] == "step") autoStepDeg = Math.Max(15, Math.Min(40, v));
                     else if (kv[0] == "minalt") minAltDeg = Math.Max(5, Math.Min(80, v));
@@ -371,7 +372,8 @@ namespace PolarAlignLive {
                     "altunit=" + altUnit.ToString(CultureInfo.InvariantCulture),
                     "azunit=" + azUnit.ToString(CultureInfo.InvariantCulture),
                     "altcal2=" + altCal.ToString("R", CultureInfo.InvariantCulture),
-                    "azcal2=" + azCal.ToString("R", CultureInfo.InvariantCulture) });
+                    "azcal2=" + azCal.ToString("R", CultureInfo.InvariantCulture),
+                    "calmount=" + calMount });
             } catch { }
         }
 
@@ -458,6 +460,20 @@ namespace PolarAlignLive {
 
         private int altUnit, azUnit;
         private double altCal, azCal;
+        /// <summary>Name of the mount the calibration was measured on. A calibration from another mount (or a simulator) is discarded.</summary>
+        private string calMount = "";
+        private string CurrentMountName() {
+            try { return (telescopeMediator.GetInfo().Name ?? "").Replace("=", "-").Replace("\r", " ").Replace("\n", " ").Trim(); } catch { return ""; }
+        }
+        /// <summary>Calibration is a property of one physical mount. If the connected mount is not the one it was measured on, forget it.</summary>
+        private void CheckCalMount() {
+            if (altCal == 0 && azCal == 0) return;
+            string now = CurrentMountName();
+            if (now.Length == 0 || string.Equals(now, calMount, StringComparison.Ordinal)) return;
+            NINA.Core.Utility.Logger.Info($"PolarAlignLive: discarding knob calibration (measured on '{calMount}', connected mount is '{now}')");
+            altCal = 0; azCal = 0; calMount = "";
+            SaveAutoSettings(); RaiseCalText();
+        }
 
         private static string UnitLabel(int u) => u == 1 ? "turns" : u == 2 ? "degrees" : "tics";
         /// <summary>Test turn per attempt: 6 tics, half a turn, or 180 degrees.</summary>
@@ -467,17 +483,17 @@ namespace PolarAlignLive {
         public string AltUnitText => "Alt knob: " + UnitLabel(altUnit);
         public string AzUnitText => "Az knob: " + UnitLabel(azUnit);
 
-        public string AltAdviceText => Advice(MoveUpArcmin, altCal, altUnit, " (altitude knob)");
-        public string AzAdviceText => Advice(MoveEastArcmin, azCal, azUnit, " (LEFT azimuth knob)");
+        public string AltAdviceText => Advice(MoveUpArcmin, altCal, altUnit, " (altitude knob)", n => n > 0 ? "axis UP" : "axis DOWN");
+        public string AzAdviceText => Advice(MoveEastArcmin, azCal, azUnit, " (LEFT azimuth knob)", n => n > 0 ? "axis EAST" : "axis WEST");
 
-        private string Advice(double needArcmin, double cal, int unit, string who = "") {
+        private string Advice(double needArcmin, double cal, int unit, string who, Func<double, string> effect) {
             if (!HasSolution || cal == 0 || Math.Abs(needArcmin) < 0.5) return "";
             double u = needArcmin / cal;
             double m = Math.Abs(u);
             string amount = unit == 1 ? m.ToString("0.00", CultureInfo.InvariantCulture) + " turns" + (m < 0.25 ? $" (about {(m * 360).ToString("0", CultureInfo.InvariantCulture)}\u00B0 of knob rotation)" : "")
                           : unit == 2 ? m.ToString("0", CultureInfo.InvariantCulture) + " degrees"
                           : m.ToString("0.0", CultureInfo.InvariantCulture) + " tics";
-            return $"\u2248 {amount} {(u > 0 ? "clockwise" : "counter-clockwise")}{who}";
+            return $"\u2248 {amount} {(u > 0 ? "clockwise" : "counter-clockwise")}{who}  \u2192 {effect(needArcmin)}";
         }
 
         private void RaiseCalText() {
@@ -600,9 +616,10 @@ namespace PolarAlignLive {
                     double k = moved / turned;
                     if (axisId == 1) altCal = k; else azCal = k;
                     NINA.Core.Utility.Logger.Info($"PolarAlignLive calibrate axis {axisId}: {k:0.000} arcmin per {UnitLabel(unit)}");
+                    calMount = CurrentMountName();
                     SaveAutoSettings(); RaiseCalText();
                 }
-                finalMsg = $"Calibrated:\nAltitude {Math.Abs(altCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(altUnit).TrimEnd('s')}, azimuth {Math.Abs(azCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(azUnit).TrimEnd('s')}.\n\nStart Live View to view adjustments to center the pole.";
+                finalMsg = $"Calibrated:\nAltitude {Math.Abs(altCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(altUnit).TrimEnd('s')}, azimuth {Math.Abs(azCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(azUnit).TrimEnd('s')}.\n\nMeasured: turning the altitude knob clockwise moves the axis {(altCal > 0 ? "UP" : "DOWN")}; turning the LEFT azimuth knob clockwise moves the axis {(azCal > 0 ? "EAST" : "WEST")}. If that is not what you saw, run the calibration again.\n\nStart Live View to view adjustments to center the pole.";
                 AfterCalChange("Knobs calibrated. Start Live View to see how far to turn each knob.");
             } catch (OperationCanceledException) {
                 Status = "Calibration cancelled.";
@@ -691,6 +708,7 @@ namespace PolarAlignLive {
                 Status = "Connect the mount first (Equipment tab).";
                 return false;
             }
+            CheckCalMount();
             return true;
         }
 
@@ -758,6 +776,7 @@ namespace PolarAlignLive {
                         (double.IsNaN(axis.RejectedResidualDeg) || axis.RejectedResidualDeg > 3 * axis.ResidualDeg);
             AxisQualityText = $"Axis check: residual {axis.ResidualDeg * 60:0.0}′, rotation {axis.RotationDeg:0}°, PA sign {(axis.PaSign > 0 ? "+" : "-")}" +
                               (good ? " (good)" : " (POOR - consider Reset and use larger RA moves)");
+            NINA.Core.Utility.Logger.Info($"PolarAlignLive axis: residual={axis.ResidualDeg * 60:0.0}' rotation={axis.RotationDeg:0.0} paSign={axis.PaSign} rejectedResidual={axis.RejectedResidualDeg * 60:0.0}' good={good}");
             Status = "Axis found.";
             Instructions = "Press Start Live, then adjust the mount's altitude/azimuth bolts until the arrows reach zero. Do not move RA/Dec now.";
             return true;
@@ -954,6 +973,7 @@ namespace PolarAlignLive {
                     HasSolution = true;
                     RaisePropertyChanged(nameof(SouthHemisphere));
                     solveSeq++;
+                    NINA.Core.Utility.Logger.Info($"PolarAlignLive live: up={up:0.00}' east={east:0.00}' total={total:0.00}' | alt: {AltAdviceText} | az: {AzAdviceText} | altCal={altCal:0.000} azCal={azCal:0.000}");
                     Beep();
                     Flash();
                     RaisePropertyChanged(nameof(MoveUpText));
