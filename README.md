@@ -10,7 +10,7 @@ Builds on GitHub Actions (no local .NET toolchain needed); NINA interfaces were 
 
 ## Use
 1. Connect camera + mount. Set up plate solver in NINA options. Mount tracking is switched on automatically if it is off.
-2. Point anywhere solvable. Polaris is NOT needed. Press Auto Capture: after your confirmation the mount slews in RA only
+2. Point anywhere solvable. Polaris is NOT needed. Press Find Axis: after your confirmation the mount slews in RA only
    and takes three frames; the plugin derives the RA axis and checks it.
 3. (Optional) Settings > pick each knob's unit (tics / turns / degrees) > Calibrate Adjustment Knobs and follow the window.
 4. Start Live. Adjust the mount's alt/az bolts until both arrows read OK. Dot = your RA axis, bullseye = pole of date.

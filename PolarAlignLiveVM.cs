@@ -66,13 +66,13 @@ namespace PolarAlignLive {
             gain = -1;
             binning = Math.Max((short)1, profileService.ActiveProfile.PlateSolveSettings.Binning);
             status = "Idle";
-            instructions = "Point at a plate-solvable field, then press Auto Capture (the mount moves itself).";
+            instructions = "Point at a plate-solvable field, then press Find Axis (the mount moves itself).";
 
             StartLiveCommand = new AsyncRelayCommand(StartLive, () => !IsBusy && axis != null);
-            StopCommand = new RelayCommand(Stop, () => IsBusy);
+            StopCommand = new RelayCommand(Stop, () => liveRunning);
             ResetCommand = new RelayCommand(Reset, () => !IsBusy);
             AutoCaptureCommand = new AsyncRelayCommand(AutoCapture, () => !IsBusy && axis == null);
-            AbortSlewCommand = new RelayCommand(AbortSlew);
+            AbortSlewCommand = new RelayCommand(AbortSlew, () => autoRunning);
             ToggleFlashCommand = new RelayCommand(() => { flashOn = !flashOn; SaveAutoSettings(); RaisePropertyChanged(nameof(FlashText)); if (flashOn) Flash(); });
             ToggleRefractionCommand = new RelayCommand(() => { refrOn = !refrOn; SaveAutoSettings(); RaisePropertyChanged(nameof(RefractionText)); });
             ToggleBeepCommand = new RelayCommand(() => { beepOn = !beepOn; SaveAutoSettings(); RaisePropertyChanged(nameof(BeepText)); if (beepOn) Beep(); });
@@ -394,6 +394,8 @@ namespace PolarAlignLive {
 
         private TaskCompletionSource<bool> confirmTcs;
         private bool autoRunning;
+        private volatile bool allStop;
+        private const string AllStopDoneText = "All Stop. The mount was stopped; the last exposure and solve were allowed to finish. Press Find Axis to start again.";
 
         private bool isBusy;
         public bool IsBusy { get => isBusy; private set { isBusy = value; RaisePropertyChanged(); NotifyCommands(); } }
@@ -443,6 +445,7 @@ namespace PolarAlignLive {
             (AutoCaptureCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
             (StartLiveCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
             (StopCommand as RelayCommand)?.NotifyCanExecuteChanged();
+            (AbortSlewCommand as RelayCommand)?.NotifyCanExecuteChanged();
             (ResetCommand as RelayCommand)?.NotifyCanExecuteChanged();
         }
 
@@ -545,7 +548,7 @@ namespace PolarAlignLive {
                 ConfirmText = "Calibration is about to begin. It needs to slew the scope. Make sure the cables are clear and the mount is ready to slew.";
                 ConfirmYesText = "CONTINUE";
                 Status = "Waiting for your confirmation before calibration starts.";
-                IsBusy = true;    // blocks Auto Capture / Live / Reset while the warning is up; Stop cancels it
+                IsBusy = true;    // blocks Find Axis / Live / Reset while the warning is up; Stop cancels it
                 ConfirmPending = true;
                 bool go = await WaitForConfirm(cts.Token);
                 ConfirmPending = false;
@@ -554,7 +557,7 @@ namespace PolarAlignLive {
                 if (!go) { Status = "Cancelled. The mount was not moved."; return; }
                 await AutoCaptureCore(true);
                 if (axis == null) {
-                    ShowCalMessage("Auto Capture did not finish, so the knob calibration was not started.\n\n" + Status + "\n\nPress Calibrate Adjustment Knobs to try again.");
+                    ShowCalMessage("Find Axis did not finish, so the knob calibration was not started.\n\n" + Status + "\n\nPress Calibrate Adjustment Knobs to try again.");
                     return;
                 }
             }
@@ -661,20 +664,13 @@ namespace PolarAlignLive {
             // Refresh the hint each time: the mount (and its reported position) moved since last frame.
             parameter.Coordinates = telescopeMediator.GetCurrentPosition();
 
-            // The frame is not aborted mid-download: cancelling a running capture makes NINA (or the camera simulator's
-            // sky download) pop up its own "Unexpected error" toast. On Stop, let the frame in progress finish
-            // (up to 20 s), then stop cleanly.
+            // The frame is never aborted mid-exposure / mid-download and the solve is never cut off: cancelling a running
+            // capture makes NINA (or the camera simulator's sky download) pop up its own "Unexpected error" toast.
+            // Any stop request only takes effect after this frame has been solved.
             var solveTask = solver.Solve(seq, parameter, new Progress<PlateSolveProgress>(), new Progress<ApplicationStatus>(), CancellationToken.None);
-            var cancelled = new TaskCompletionSource<bool>();
-            using (ct.Register(() => cancelled.TrySetResult(true))) {
-                if (await Task.WhenAny(solveTask, cancelled.Task) != solveTask) {
-                    await Task.WhenAny(solveTask, Task.Delay(20000));
-                    if (!solveTask.IsCompleted) { try { cameraMediator.AbortExposure(); } catch { } }
-                    _ = solveTask.ContinueWith(t => { var ignored = t.Exception; }, TaskScheduler.Default);
-                    throw new OperationCanceledException(ct);
-                }
-            }
-            return await solveTask;
+            var solved = await solveTask;
+            ct.ThrowIfCancellationRequested();   // a Cancel from the calibration window takes effect only after the frame is done
+            return solved;
         }
 
         private static SolvedFrame ToFrame(PlateSolveResult r) => new SolvedFrame {
@@ -750,7 +746,7 @@ namespace PolarAlignLive {
 
             if (frames.Count < 3) {
                 Status = $"Frame {frames.Count} solved.";
-                Instructions = "Auto Capture is moving the mount in RA for the next frame. Do not touch the mount.";
+                Instructions = "Find Axis is moving the mount in RA for the next frame. Do not touch the mount.";
                 return true;
             }
 
@@ -781,8 +777,8 @@ namespace PolarAlignLive {
 
         private Task AutoCapture() => AutoCaptureCore(false);
 
-        /// <summary>skipConfirm = true when the knob calibration runs Auto Capture on the user's behalf (the user already asked
-        /// for the calibration; Stop / ABORT SLEW remain available).</summary>
+        /// <summary>skipConfirm = true when the knob calibration runs Find Axis on the user's behalf (the user already asked
+        /// for the calibration; All Stop remains available).</summary>
         private async Task AutoCaptureCore(bool skipConfirm) {
             if (!EquipmentReady()) return;
             var info = telescopeMediator.GetInfo();
@@ -795,15 +791,16 @@ namespace PolarAlignLive {
             var pos = telescopeMediator.GetCurrentPosition().Transform(Epoch.JNOW);
             if (!SlewPlanner.Plan(pos.RADegrees, pos.Dec, astro.Latitude, astro.Longitude, DateTime.UtcNow,
                                   AutoStepDeg, MinAltDeg, MaxAltDeg, out var plan, out var reason)) {
-                Status = "Auto capture not safe here: " + reason;
+                Status = "Find Axis is not safe here: " + reason;
                 Instructions = "No slew was made. Change the mount Dec (e.g. nearer the celestial equator) or adjust the altitude limits, then try again.";
                 return;
             }
 
             cts = new CancellationTokenSource();
             var ct = cts.Token;
-            IsBusy = true;
+            allStop = false;
             autoRunning = true;
+            IsBusy = true;
             try {
                 string side = plan.HaSign > 0 ? "west" : "east";
                 string path = (plan.NeedsReposition ? RaText(pos.RADegrees) + " > " + RaText(plan.StartRaDeg) + " (safe start) > " : "") +
@@ -845,7 +842,9 @@ namespace PolarAlignLive {
                     }
                     Status = $"Moving to safe start RA {RaText(plan.StartRaDeg)}...";
                     var start = new Coordinates(Angle.ByDegree(plan.StartRaDeg), Angle.ByDegree(plan.DecDeg), Epoch.JNOW);
-                    if (!await telescopeMediator.SlewToCoordinatesAsync(start, ct)) { Status = "Slew did not complete."; return; }
+                    bool startDone = await telescopeMediator.SlewToCoordinatesAsync(start, ct);
+                    if (allStop) { Status = AllStopDoneText; return; }
+                    if (!startDone) { Status = "Slew did not complete."; return; }
                     if (!telescopeMediator.GetInfo().SideOfPier.Equals(pier)) {
                         Status = "Pier side changed during the slew. Stopped. Check the mount and Reset.";
                         return;
@@ -853,10 +852,12 @@ namespace PolarAlignLive {
                     Status = "Settling...";
                     await Task.Delay(3000, ct);
                 }
+                if (allStop) { Status = AllStopDoneText; return; }
 
                 if (!await CaptureCore(ct)) return;
 
                 for (int k = 0; k < 2; k++) {
+                    if (allStop) { Status = AllStopDoneText; return; }
                     // Re-verify right before each slew with the current clock.
                     if (!SlewPlanner.Check(plan.RaDeg[k], plan.DecDeg, astro.Latitude, astro.Longitude, DateTime.UtcNow,
                                            plan.HaSign, MinAltDeg, MaxAltDeg, out var why, out _, out _)) {
@@ -866,6 +867,7 @@ namespace PolarAlignLive {
                     Status = $"Slewing RA to {RaText(plan.RaDeg[k])} (move {k + 1} of 2)...";
                     var target = new Coordinates(Angle.ByDegree(plan.RaDeg[k]), Angle.ByDegree(plan.DecDeg), Epoch.JNOW);
                     bool done = await telescopeMediator.SlewToCoordinatesAsync(target, ct);
+                    if (allStop) { Status = AllStopDoneText; return; }
                     if (!done) { Status = "Slew did not complete."; return; }
                     if (!telescopeMediator.GetInfo().SideOfPier.Equals(pier)) {
                         Status = "Pier side changed during the slew. Stopped. Check the mount and Reset.";
@@ -873,6 +875,7 @@ namespace PolarAlignLive {
                     }
                     Status = "Settling...";
                     await Task.Delay(3000, ct);
+                    if (allStop) { Status = AllStopDoneText; return; }
                     if (!await CaptureCore(ct)) return;
                 }
             } catch (OperationCanceledException) {
@@ -880,7 +883,7 @@ namespace PolarAlignLive {
                 Status = "Cancelled. Mount slew stopped.";
             } catch (Exception ex) {
                 try { telescopeMediator.StopSlew(); } catch { }
-                Status = FriendlyError(ex);
+                Status = allStop ? AllStopDoneText : FriendlyError(ex);
             } finally {
                 ConfirmPending = false;
                 autoRunning = false;
@@ -893,9 +896,9 @@ namespace PolarAlignLive {
             if (!EquipmentReady() || !await EnsureTracking()) return;
             cts = new CancellationTokenSource();
             var ct = cts.Token;
-            IsBusy = true;
             liveStop = false;
             liveRunning = true;
+            IsBusy = true;
             Instructions = "Adjust altitude/azimuth. Dot = where your RA axis points; bullseye = pole.";
             Task<IExposureData> pending = null;
             try {
@@ -986,13 +989,13 @@ namespace PolarAlignLive {
             }
         }
 
-        /// <summary>Always-enabled emergency stop: halts any mount slew right now (even one not started by this panel)
-        /// and cancels a running Auto Capture / Live run.</summary>
+        /// <summary>All Stop (enabled only while Find Axis runs): stops every slew immediately. It does NOT cancel the
+        /// exposure / download / plate solve in progress - those finish - and Find Axis then ends before the next move.</summary>
         private void AbortSlew() {
-            try { telescopeMediator.StopSlew(); } catch (Exception ex) { NINA.Core.Utility.Logger.Info("PolarAlignLive abort slew: " + ex.Message); }
+            allStop = true;
+            try { telescopeMediator.StopSlew(); } catch (Exception ex) { NINA.Core.Utility.Logger.Info("PolarAlignLive all stop: " + ex.Message); }
             try { confirmTcs?.TrySetResult(false); } catch { }
-            try { cts?.Cancel(); } catch { }
-            Status = "SLEW ABORTED. Mount stop command sent.";
+            Status = "ALL STOP - mount stopped. Letting the current exposure and solve finish...";
         }
 
         private volatile bool liveRunning;
@@ -1019,7 +1022,7 @@ namespace PolarAlignLive {
             FrameCountText = "Frames: 0 / 3";
             AxisQualityText = "";
             Status = "Idle";
-            Instructions = "Point at a plate-solvable field, then press Auto Capture (the mount moves itself).";
+            Instructions = "Point at a plate-solvable field, then press Find Axis (the mount moves itself).";
             NotifyCommands();
         }
     }
