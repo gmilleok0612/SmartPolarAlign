@@ -75,6 +75,16 @@ namespace PolarAlignLive {
         /// <summary>Accent colour for the bullseye display.</summary>
         public Color TintColor => Tint;
         public Brush TextBrush => nightOn ? Br(Tint) : Br(Color.FromRgb(235, 235, 235));
+        /// <summary>Same hue as the text but brighter (up to 2.5x, capped at full), for the Live-update flash.</summary>
+        public Brush FlashBrush {
+            get {
+                if (!nightOn) return Br(Color.FromRgb(255, 255, 255));
+                var t = Tint;
+                int m = Math.Max(t.R, Math.Max(t.G, t.B));
+                double f = m == 0 ? 1 : Math.Min(255.0 / m, 2.5);
+                return Br(Color.FromRgb((byte)Math.Min(255, t.R * f), (byte)Math.Min(255, t.G * f), (byte)Math.Min(255, t.B * f)));
+            }
+        }
         public Brush DimBrush => nightOn ? Br(Scale(Tint, 0.6)) : Br(Color.FromRgb(150, 150, 150));
         public Brush BorderBrushN => nightOn ? Br(Scale(Tint, 0.55)) : Br(NinaGreen);
         public Brush FillBrush => nightOn ? Br(Scale(Tint, 0.12)) : Br(Color.FromRgb(30, 42, 42));
@@ -82,7 +92,7 @@ namespace PolarAlignLive {
         private void Changed() {
             foreach (var n in new[] { nameof(NightOn), nameof(NightOff), nameof(ColorRed), nameof(ColorGreen), nameof(ColorWhite),
                                       nameof(DimmerPercent), nameof(DimmerText), nameof(TintColor), nameof(TextBrush),
-                                      nameof(DimBrush), nameof(BorderBrushN), nameof(FillBrush) }) {
+                                      nameof(DimBrush), nameof(BorderBrushN), nameof(FillBrush), nameof(FlashBrush) }) {
                 Raise(n);
             }
             Save();

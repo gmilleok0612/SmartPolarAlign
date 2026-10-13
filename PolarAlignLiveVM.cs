@@ -80,6 +80,7 @@ namespace PolarAlignLive {
                 } catch (Exception ex) { Status = FriendlyError(ex); }
             });
             AbortSlewCommand = new RelayCommand(AbortSlew);
+            ToggleFlashCommand = new RelayCommand(() => { flashOn = !flashOn; SaveAutoSettings(); RaisePropertyChanged(nameof(FlashText)); if (flashOn) Flash(); });
             ToggleRefractionCommand = new RelayCommand(() => { refrOn = !refrOn; SaveAutoSettings(); RaisePropertyChanged(nameof(RefractionText)); });
             ToggleBeepCommand = new RelayCommand(() => { beepOn = !beepOn; SaveAutoSettings(); RaisePropertyChanged(nameof(BeepText)); if (beepOn) Beep(); });
             CycleAltUnitCommand = new RelayCommand(() => { altUnit = (altUnit + 1) % 3; altCal = 0; AfterCalChange("Alt knob unit changed; run Calibrate Adjustment Knobs again."); });
@@ -183,6 +184,26 @@ namespace PolarAlignLive {
         public ICommand CycleAzUnitCommand { get; }
         public ICommand CalibrateKnobsCommand { get; }
         public ICommand ToggleBeepCommand { get; }
+
+        private bool flashOn = true;
+        public bool FlashOn => flashOn;
+        public bool BeepOn => beepOn;
+        public string FlashText => flashOn ? "Live flash: On" : "Live flash: Off";
+        public ICommand ToggleFlashCommand { get; private set; }
+
+        private bool adviceFlash;
+        /// <summary>True for a moment after each new Live solution: the advice text is drawn brighter.</summary>
+        public bool AdviceFlash { get => adviceFlash; private set { if (adviceFlash == value) return; adviceFlash = value; RaisePropertyChanged(); } }
+        private int flashGen;
+        private async void Flash() {
+            if (!flashOn) return;
+            int gen = ++flashGen;
+            try {
+                AdviceFlash = true;
+                await Task.Delay(450);
+                if (gen == flashGen) AdviceFlash = false;
+            } catch { AdviceFlash = false; }
+        }
 
         private bool refrOn = true;
         public string RefractionText => refrOn ? "Refraction: On" : "Refraction: Off";
@@ -322,6 +343,7 @@ namespace PolarAlignLive {
                     else if (kv[0] == "azunit") azUnit = (int)Math.Max(0, Math.Min(2, v));
                     else if (kv[0] == "beep") beepOn = v != 0;
                     else if (kv[0] == "refr") refrOn = v != 0;
+                    else if (kv[0] == "flash") flashOn = v != 0;
                     else if (kv[0] == "remote") remoteEnabled = v != 0;
                     else if (kv[0] == "rport") remotePort = (int)Math.Max(1024, Math.Min(65535, v));
                     else if (kv[0] == "rpin") remotePin = (int)Math.Max(0, Math.Min(999999, v));
@@ -341,6 +363,7 @@ namespace PolarAlignLive {
                     "settings=" + (settingsOpen ? "1" : "0"),
                     "beep=" + (beepOn ? "1" : "0"),
                     "refr=" + (refrOn ? "1" : "0"),
+                    "flash=" + (flashOn ? "1" : "0"),
                     "remote=" + (remoteEnabled ? "1" : "0"),
                     "rport=" + remotePort.ToString(CultureInfo.InvariantCulture),
                     "rpin=" + remotePin.ToString(CultureInfo.InvariantCulture),
@@ -909,6 +932,7 @@ namespace PolarAlignLive {
                     HasSolution = true;
                     solveSeq++;
                     Beep();
+                    Flash();
                     RaisePropertyChanged(nameof(MoveUpText));
                     RaisePropertyChanged(nameof(MoveEastText));
                     RaisePropertyChanged(nameof(TotalErrorText));
