@@ -129,6 +129,13 @@
         <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
     </Style>
 
+    <Style x:Key="PalAdviceLabel" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{Binding Theme.AdviceBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding AdviceFlash}" Value="True"><Setter Property="Foreground" Value="{Binding Theme.FlashBrush}" /></DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <Style x:Key="PalDimLabel" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{Binding Theme.DimBrush}" />
     </Style>
@@ -263,11 +270,11 @@
                                              Quality="{Binding AlignmentLevel}"
                                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
                             <StackPanel Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,0,0,0" IsHitTestVisible="False">
-                                <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalLabel}" FontSize="20" FontWeight="Bold" />
+                                <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalAdviceLabel}" FontSize="20" FontWeight="Bold" />
                                 <TextBlock Text="{Binding AltAdviceText}" FontSize="15" FontWeight="Bold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
+                                            <Setter Property="Foreground" Value="{Binding Theme.AdviceBrush}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding AdviceFlash}" Value="True"><Setter Property="Foreground" Value="{Binding Theme.FlashBrush}" /></DataTrigger>
                                                 <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
@@ -275,11 +282,11 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalLabel}" FontSize="20" FontWeight="Bold" />
+                                <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalAdviceLabel}" FontSize="20" FontWeight="Bold" />
                                 <TextBlock Text="{Binding AzAdviceText}" FontSize="15" FontWeight="Bold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
+                                            <Setter Property="Foreground" Value="{Binding Theme.AdviceBrush}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding AdviceFlash}" Value="True"><Setter Property="Foreground" Value="{Binding Theme.FlashBrush}" /></DataTrigger>
                                                 <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger>
