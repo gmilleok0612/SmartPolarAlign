@@ -91,7 +91,7 @@ namespace PolarAlignLive.Astro {
         /// assuming the camera is rigid and only RA rotated. All difference vectors of fixed camera
         /// points are perpendicular to the axis, so the axis is the cross product of two of them.
         /// </summary>
-        public static Vec3 AxisFromTwoFrames(CameraFrame f1, CameraFrame f2) {
+        public static Vec3 AxisFromTwoFrames(CameraFrame f1, CameraFrame f2, bool southern = false) {
             Vec3[] P(CameraFrame f) => new[] {
                 f.B.Normalized(),
                 (f.B + f.R * Lever).Normalized(),
@@ -110,7 +110,8 @@ namespace PolarAlignLive.Astro {
                 if (c.Length > bestLen) { bestLen = c.Length; best = c; }
             }
             var axis = best.Normalized();
-            return axis.Z >= 0 ? axis : -axis; // northern-hemisphere pole side
+            // Point the axis at the celestial pole of the observer's hemisphere (north: +Z, south: -Z).
+            return (southern ? axis.Z <= 0 : axis.Z >= 0) ? axis : -axis;
         }
 
         /// <summary>Rotation angle (deg) between two frames about a given axis, measured on the boresights.</summary>
@@ -127,7 +128,7 @@ namespace PolarAlignLive.Astro {
         /// Frames 1 and 2 define the axis; frame 3 selects the correct position-angle sign convention
         /// by checking that the boresight stays equidistant from the axis.
         /// </summary>
-        public static AxisSolution SolveAxis(IReadOnlyList<SolvedFrame> frames) {
+        public static AxisSolution SolveAxis(IReadOnlyList<SolvedFrame> frames, bool southern = false) {
             if (frames == null || frames.Count < 3) throw new ArgumentException("Three frames are required.");
 
             AxisSolution best = null;
@@ -136,7 +137,7 @@ namespace PolarAlignLive.Astro {
                 var f1 = CameraFrame.Create(frames[0], sign);
                 var f2 = CameraFrame.Create(frames[1], sign);
                 var f3 = CameraFrame.Create(frames[2], sign);
-                var axis = AxisFromTwoFrames(f1, f2);
+                var axis = AxisFromTwoFrames(f1, f2, southern);
 
                 double resid = System.Math.Abs(AngleDeg(axis, f3.B) - AngleDeg(axis, f1.B));
                 // Average the camera-frame components seen from frames 1 and 2 to reduce noise.
@@ -200,12 +201,18 @@ namespace PolarAlignLive.Astro {
                                      double refractionArcmin = 0) {
             double lst = LocalSiderealDeg(utc, longitudeEastDeg);
             AltAz(axisRaDeg, axisDecDeg, latDeg, lst, out double alt, out double az);
-            double azWrapped = az > 180.0 ? az - 360.0 : az; // pole is at az 0
+            // North: the pole is at altitude = latitude, azimuth 0. South: altitude = |latitude|, azimuth 180.
+            // h = +1 north, -1 south. Positive moveEast always means "swing the axis toward the east".
+            int h = latDeg >= 0 ? 1 : -1;
+            double poleAlt = Math.Abs(latDeg);
+            double azErr = az - (h > 0 ? 0.0 : 180.0);
+            while (azErr > 180.0) azErr -= 360.0;
+            while (azErr < -180.0) azErr += 360.0;
             // With refraction the target is the apparent pole, which sits refractionArcmin higher than the true pole.
-            moveUpArcmin = (latDeg - alt) * 60.0 + refractionArcmin;
-            moveEastArcmin = -azWrapped * System.Math.Cos(alt * D2R) * 60.0;
+            moveUpArcmin = (poleAlt - alt) * 60.0 + refractionArcmin;
+            moveEastArcmin = -h * azErr * System.Math.Cos(alt * D2R) * 60.0;
             totalArcmin = refractionArcmin == 0
-                ? (90.0 - axisDecDeg) * 60.0                                              // true polar distance of the axis
+                ? (90.0 - h * axisDecDeg) * 60.0                                          // true polar distance of the axis
                 : System.Math.Sqrt(moveUpArcmin * moveUpArcmin + moveEastArcmin * moveEastArcmin);   // distance to the apparent pole
         }
 

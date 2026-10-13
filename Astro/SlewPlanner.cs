@@ -78,7 +78,8 @@ namespace PolarAlignLive.Astro {
 
             foreach (double margin in Margins) {
                 double effMin = EffectiveMin(minAlt, maxAlt, margin);
-                foreach (double d in new[] { 30.0, 20.0, 40.0, 10.0, 50.0, 0.0 }) {
+                foreach (double dAbs in new[] { 30.0, 20.0, 40.0, 10.0, 50.0, 0.0 }) {
+                    double d = latDeg < 0 ? -dAbs : dAbs;   // southern observers use southern declinations
                     if (stepDeg * Math.Cos(d * PolarMath.D2R) < MinSkySepDeg) continue;
                     if (PlanRaOnly(ra0Deg, d, latDeg, lonEastDeg, utc, stepDeg, effMin, maxAlt, out plan, out _)) {
                         plan.NeedsReposition = true;   // Dec differs from the current position: always a confirmed safe-start slew
