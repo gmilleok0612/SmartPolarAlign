@@ -41,6 +41,12 @@ namespace PolarAlignLive.UI {
         public double MoveUp { get => (double)GetValue(MoveUpProperty); set => SetValue(MoveUpProperty, value); }
         /// <summary>Arcmin the axis must move east (negative = west). East is to the right when facing north.</summary>
         public double MoveEast { get => (double)GetValue(MoveEastProperty); set => SetValue(MoveEastProperty, value); }
+        public static readonly DependencyProperty SouthProperty = DependencyProperty.Register(
+            nameof(South), typeof(bool), typeof(PolarDisplay),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+        /// <summary>Southern hemisphere: looking at the south celestial pole, east is to the LEFT.</summary>
+        public bool South { get => (bool)GetValue(SouthProperty); set => SetValue(SouthProperty, value); }
+
         public bool HasSolution { get => (bool)GetValue(HasSolutionProperty); set => SetValue(HasSolutionProperty, value); }
 
         private static readonly Typeface Face = new Typeface("Segoe UI");
@@ -94,14 +100,15 @@ namespace PolarAlignLive.UI {
             if (r1 >= 14) Label(dc, "1\u2032", new Point(c.X + r1 * 0.71 + 4, c.Y + r1 * 0.71), 11, lit1 ? Glow : Red);
             dc.DrawEllipse(Red, null, c, 3, 3);   // pole
 
-            Label(dc, "N", new Point(c.X - 5, c.Y - rMax - 22), 13, Red);
-            Label(dc, "E", new Point(c.X + rMax + 6, c.Y - 9), 13, Red);
-            Label(dc, "W", new Point(c.X - rMax - 20, c.Y - 9), 13, Red);
+            double m = South ? -1.0 : 1.0;   // horizontal mirror: east is right facing north, left facing south
+            Label(dc, South ? "S" : "N", new Point(c.X - 5, c.Y - rMax - 22), 13, Red);
+            Label(dc, South ? "W" : "E", new Point(c.X + rMax + 6, c.Y - 9), 13, Red);
+            Label(dc, South ? "E" : "W", new Point(c.X - rMax - 20, c.Y - 9), 13, Red);
 
             if (!HasSolution) return;
 
             // Axis position relative to the pole is the negative of the required move. East = right.
-            var dot = new Point(c.X - MoveEast * pxPerArcmin, c.Y + MoveUp * pxPerArcmin);
+            var dot = new Point(c.X - m * MoveEast * pxPerArcmin, c.Y + MoveUp * pxPerArcmin);
             // Clamp to outer ring so a huge error stays visible.
             var dv = dot - c;
             if (dv.Length > rMax) { dv.Normalize(); dv *= rMax; dot = c + dv; }
@@ -110,7 +117,7 @@ namespace PolarAlignLive.UI {
             dc.DrawLine(new Pen(Red, 1.5) { DashStyle = DashStyles.Dash }, dot, c);
 
             // Chevrons along each crosshair arm pointing the way to push the axis. East = +x, up = -y (screen).
-            DrawChevrons(dc, ChevronPen, c, rMax, MoveEast > 0 ? 1 : -1, 0, Math.Abs(MoveEast));
+            DrawChevrons(dc, ChevronPen, c, rMax, m * (MoveEast > 0 ? 1 : -1), 0, Math.Abs(MoveEast));
             DrawChevrons(dc, ChevronPen, c, rMax, 0, MoveUp > 0 ? -1 : 1, Math.Abs(MoveUp));
         }
 
