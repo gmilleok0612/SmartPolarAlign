@@ -200,7 +200,7 @@ namespace PolarAlignLive {
             int gen = ++flashGen;
             try {
                 AdviceFlash = true;
-                await Task.Delay(450);
+                await Task.Delay(600);
                 if (gen == flashGen) AdviceFlash = false;
             } catch { AdviceFlash = false; }
         }

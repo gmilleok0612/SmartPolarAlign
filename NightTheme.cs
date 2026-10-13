@@ -85,6 +85,8 @@ namespace PolarAlignLive {
                 return Br(Color.FromRgb((byte)Math.Min(255, t.R * f), (byte)Math.Min(255, t.G * f), (byte)Math.Min(255, t.B * f)));
             }
         }
+        /// <summary>Resting colour of the advice text: a little dimmer than normal so the Live flash stands out.</summary>
+        public Brush AdviceBrush => nightOn ? Br(Scale(Tint, 0.7)) : Br(Color.FromRgb(175, 175, 175));
         public Brush DimBrush => nightOn ? Br(Scale(Tint, 0.6)) : Br(Color.FromRgb(150, 150, 150));
         public Brush BorderBrushN => nightOn ? Br(Scale(Tint, 0.55)) : Br(NinaGreen);
         public Brush FillBrush => nightOn ? Br(Scale(Tint, 0.12)) : Br(Color.FromRgb(30, 42, 42));
@@ -92,7 +94,7 @@ namespace PolarAlignLive {
         private void Changed() {
             foreach (var n in new[] { nameof(NightOn), nameof(NightOff), nameof(ColorRed), nameof(ColorGreen), nameof(ColorWhite),
                                       nameof(DimmerPercent), nameof(DimmerText), nameof(TintColor), nameof(TextBrush),
-                                      nameof(DimBrush), nameof(BorderBrushN), nameof(FillBrush), nameof(FlashBrush) }) {
+                                      nameof(DimBrush), nameof(BorderBrushN), nameof(FillBrush), nameof(FlashBrush), nameof(AdviceBrush) }) {
                 Raise(n);
             }
             Save();
