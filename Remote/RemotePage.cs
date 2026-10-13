@@ -265,6 +265,7 @@ namespace PolarAlignLive.Remote {
     var W = 440, cx = W / 2, cy = W / 2, rMax = W / 2 - 28;
     var red = rgb(dim), dimRed = rgb(dim * 0.55);
     var has = st && st.hasSolution, up = has ? st.moveUp : 0, east = has ? st.moveEast : 0;
+    var sth = !!(st && st.south), mir = sth ? -1 : 1;   // facing the south pole, east is on the left
     var q = st ? st.quality : 0;
 
     var err = has ? Math.sqrt(up * up + east * east) : 20;
@@ -298,12 +299,12 @@ namespace PolarAlignLive.Remote {
     if (r1 >= 14) label('1′', cx + r1 * 0.71 + 4, cy + r1 * 0.71, 11, lit1 ? glow : red);
     g.beginPath(); g.arc(cx, cy, 3, 0, Math.PI * 2); g.fillStyle = red; g.fill();
 
-    label('N', cx - 5, cy - rMax - 22, 13, red);
-    label('E', cx + rMax + 6, cy - 9, 13, red);
-    label('W', cx - rMax - 20, cy - 9, 13, red);
+    label(sth ? 'S' : 'N', cx - 5, cy - rMax - 22, 13, red);
+    label(sth ? 'W' : 'E', cx + rMax + 6, cy - 9, 13, red);
+    label(sth ? 'E' : 'W', cx - rMax - 20, cy - 9, 13, red);
 
     if (!has) return;
-    var dx = cx - east * ppa, dy = cy + up * ppa;
+    var dx = cx - mir * east * ppa, dy = cy + up * ppa;
     var vx = dx - cx, vy = dy - cy, len = Math.sqrt(vx * vx + vy * vy);
     if (len > rMax) { dx = cx + vx / len * rMax; dy = cy + vy / len * rMax; }
     g.beginPath(); g.arc(dx, dy, 7, 0, Math.PI * 2); g.fillStyle = red; g.fill();
@@ -317,7 +318,7 @@ namespace PolarAlignLive.Remote {
         g.lineWidth = 4; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = red; g.stroke();
       }
     }
-    chevrons(east > 0 ? 1 : -1, 0, Math.abs(east));
+    chevrons(mir * (east > 0 ? 1 : -1), 0, Math.abs(east));
     chevrons(0, up > 0 ? -1 : 1, Math.abs(up));
   }
   window.addEventListener('resize', draw);

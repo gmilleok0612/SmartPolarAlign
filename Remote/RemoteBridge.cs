@@ -56,6 +56,7 @@ namespace PolarAlignLive.Remote {
                     ["pause"] = vm.PauseSeconds,
                     ["altUnit"] = vm.AltUnitText ?? "",
                     ["azUnit"] = vm.AzUnitText ?? "",
+                    ["south"] = vm.SouthHemisphere,
                     ["canAuto"] = Can(vm.AutoCaptureCommand),
                     ["canAllStop"] = Can(vm.AbortSlewCommand),
                     ["canLive"] = Can(vm.StartLiveCommand),
