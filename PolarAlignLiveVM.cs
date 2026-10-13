@@ -313,6 +313,10 @@ namespace PolarAlignLive {
         private double minAltDeg = 20;
         public double MinAltDeg { get => minAltDeg; set { minAltDeg = Math.Max(5, Math.Min(80, value)); RaisePropertyChanged(); SaveAutoSettings(); } }
 
+        private int pauseSec = 5;
+        /// <summary>Seconds to wait after each Live update before the next exposure, so the user has time to adjust.</summary>
+        public int PauseSeconds { get => pauseSec; set { pauseSec = Math.Max(0, Math.Min(60, value)); RaisePropertyChanged(); SaveAutoSettings(); } }
+
         private double maxAltDeg = 60;
         /// <summary>Zenith guard: auto slews never go above this altitude (protects long tubes from the pier).</summary>
         public double MaxAltDeg { get => maxAltDeg; set { maxAltDeg = Math.Max(20, Math.Min(85, value)); RaisePropertyChanged(); SaveAutoSettings(); } }
@@ -329,6 +333,7 @@ namespace PolarAlignLive {
                     if (kv[0] == "step") autoStepDeg = Math.Max(15, Math.Min(40, v));
                     else if (kv[0] == "minalt") minAltDeg = Math.Max(5, Math.Min(80, v));
                     else if (kv[0] == "maxalt") maxAltDeg = Math.Max(20, Math.Min(85, v));
+                    else if (kv[0] == "pause") pauseSec = (int)Math.Max(0, Math.Min(60, v));
                     else if (kv[0] == "crop") cropPercent = v == 50 ? 50 : v == 25 ? 25 : 100;
                     else if (kv[0] == "settings") settingsOpen = v == 1;
                     else if (kv[0] == "altunit") altUnit = (int)Math.Max(0, Math.Min(2, v));
@@ -351,6 +356,7 @@ namespace PolarAlignLive {
                     "step=" + autoStepDeg.ToString(CultureInfo.InvariantCulture),
                     "minalt=" + minAltDeg.ToString(CultureInfo.InvariantCulture),
                     "maxalt=" + maxAltDeg.ToString(CultureInfo.InvariantCulture),
+                    "pause=" + pauseSec.ToString(CultureInfo.InvariantCulture),
                     "crop=" + cropPercent.ToString(CultureInfo.InvariantCulture),
                     "settings=" + (settingsOpen ? "1" : "0"),
                     "beep=" + (beepOn ? "1" : "0"),
@@ -888,6 +894,8 @@ namespace PolarAlignLive {
             cts = new CancellationTokenSource();
             var ct = cts.Token;
             IsBusy = true;
+            liveStop = false;
+            liveRunning = true;
             Instructions = "Adjust altitude/azimuth. Dot = where your RA axis points; bullseye = pole.";
             Task<IExposureData> pending = null;
             try {
@@ -896,25 +904,27 @@ namespace PolarAlignLive {
                 var progress = new Progress<ApplicationStatus>();
                 int misses = 0;
 
-                // Pipeline: the next exposure starts as soon as the previous frame has downloaded,
-                // so exposure + download of frame N+1 overlaps with the plate solve of frame N.
+                // With no pause, the next exposure starts as soon as the previous frame has downloaded, so exposure +
+                // download of frame N+1 overlaps with the plate solve of frame N. With a pause, the next exposure only
+                // starts after the pause so the picture is taken after the user's adjustment.
                 // Exp / Gain / Bin / Crop are re-read for every new exposure.
                 short pendingBin = Binning;
-                pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, "");
 
-                while (!ct.IsCancellationRequested) {
+                while (!liveStop && !ct.IsCancellationRequested) {
+                    if (pending == null) { pendingBin = Binning; pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, ""); }
                     Status = "Exposing...";
                     var exposure = await pending;
+                    pending = null;
                     short solveBin = pendingBin;
 
-                    pendingBin = Binning;
-                    pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, "");
+                    if (pauseSec <= 0) { pendingBin = Binning; pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, ""); }
 
                     Status = "Solving...";
                     var imageData = await exposure.ToImageData(progress, ct);
                     parameter.Binning = solveBin;
                     parameter.Coordinates = telescopeMediator.GetCurrentPosition();
                     var result = await imageSolver.Solve(imageData, parameter, progress, ct);
+                    ct.ThrowIfCancellationRequested();   // Stop pressed during the solve: report "stopped", not "solve failed"
                     if (result == null || !result.Success || result.Coordinates == null) {
                         misses++;
                         Status = $"Solve failed ({misses}). Retrying...";
@@ -944,9 +954,24 @@ namespace PolarAlignLive {
                     RaisePropertyChanged(nameof(TotalErrorText));
                     RaisePropertyChanged(nameof(AltAdviceText));
                     RaisePropertyChanged(nameof(AzAdviceText));
-                    Status = "Live  (" + DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + ")";
+                    string stamp = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+                    Status = "Live  (" + stamp + ")";
+                    for (int left = pauseSec; left > 0 && !liveStop; left--) {
+                        Status = "Live  (" + stamp + ")  -  next solve in " + left + " s, adjust now";
+                        for (int tick = 0; tick < 4 && !liveStop; tick++) await Task.Delay(250, ct);
+                    }
                 }
-            } catch (OperationCanceledException) {
+                ct.ThrowIfCancellationRequested();
+
+                // Stopped by the user: let any exposure already running finish (never abort it mid-exposure), then discard it.
+                if (pending != null) {
+                    Status = "Stopping Live - finishing the last exposure...";
+                    try { await pending; } catch { }
+                    pending = null;
+                }
+                Status = "Live is stopped. Make your adjustment, then press Start Live to continue.";
+                Instructions = "Live is stopped. The axis solution is kept - press Start Live to resume.";
+            } catch (Exception cex) when (cex is OperationCanceledException || ct.IsCancellationRequested) {
                 try { cameraMediator.AbortExposure(); } catch { }
                 Status = "Live is stopped. Make your adjustment, then press Start Live to continue.";
                 Instructions = "Live is stopped. The axis solution is kept - press Start Live to resume.";
@@ -956,6 +981,7 @@ namespace PolarAlignLive {
             } finally {
                 // Observe any exception from the abandoned exposure so it is not reported as unobserved.
                 if (pending != null) _ = pending.ContinueWith(t => { var ignored = t.Exception; }, TaskScheduler.Default);
+                liveRunning = false;
                 IsBusy = false;
             }
         }
@@ -969,7 +995,16 @@ namespace PolarAlignLive {
             Status = "SLEW ABORTED. Mount stop command sent.";
         }
 
+        private volatile bool liveRunning;
+        private volatile bool liveStop;
+
         private void Stop() {
+            if (liveRunning) {
+                // Live never cancels an exposure or a solve: it finishes the current ones, shows the result, then stops.
+                liveStop = true;
+                Status = "Stopping Live - finishing the current exposure and solve...";
+                return;
+            }
             Status = "Stopping - finishing the current frame...";
             try { cts?.Cancel(); } catch { }
             if (autoRunning) { try { telescopeMediator.StopSlew(); } catch { } }

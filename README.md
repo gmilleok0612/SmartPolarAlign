@@ -37,6 +37,7 @@ Allow the port through Windows Firewall. Local network only.
 - Northern hemisphere only. Needs profile latitude/longitude correct and PC clock correct.
 - Live rate = exposure + solve time per frame (seconds, not video rate).
 - Dec must not move between frames 1-3 (rejected if mount reports >0.5 deg Dec change).
+- Pause s (Settings, PC and phone): seconds to wait after each Live update before the next exposure (default 5, range 0-60), so you have time to turn the knobs. 0 = continuous.
 - Live beep and Live flash (Settings): each new Live solution beeps and briefly brightens the advice text, on the PC and on the phone page. Both can be turned off in Settings; the phone page has its own beep switch too.
 - Refraction: Settings > "Refraction: On" (default) aims at the apparent pole, which sits about 1' above the true pole at mid-northern latitudes (the bend of starlight by the atmosphere, scaled for your site elevation). Turn it off to aim at the true pole.
 - Settings (including knob calibration) are saved in %LOCALAPPDATA%\NINA\PolarAlignLive.auto.settings.
