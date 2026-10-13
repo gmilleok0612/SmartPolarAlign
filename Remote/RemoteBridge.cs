@@ -53,6 +53,7 @@ namespace PolarAlignLive.Remote {
                     ["gain"] = vm.Gain,
                     ["bin"] = (int)vm.Binning,
                     ["crop"] = vm.CropPercent,
+                    ["pause"] = vm.PauseSeconds,
                     ["altUnit"] = vm.AltUnitText ?? "",
                     ["azUnit"] = vm.AzUnitText ?? "",
                     ["canAuto"] = Can(vm.AutoCaptureCommand),
@@ -94,6 +95,10 @@ namespace PolarAlignLive.Remote {
                         }
                         case "bin": {
                             if (short.TryParse(arg, NumberStyles.Integer, CultureInfo.InvariantCulture, out var b)) vm.Binning = b;
+                            return "ok";
+                        }
+                        case "pause": {
+                            if (int.TryParse(arg, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ps)) vm.PauseSeconds = ps;
                             return "ok";
                         }
                         case "crop": {

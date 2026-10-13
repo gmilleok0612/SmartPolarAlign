@@ -87,6 +87,9 @@ namespace PolarAlignLive.Remote {
     <label>Bin <input id="iBin" inputmode="numeric"></label>
   </div>
   <div class="row">
+    <label>Pause between solves (s) <input id="iPause" inputmode="numeric"></label>
+  </div>
+  <div class="row">
     <label>Crop</label>
     <button class="small" data-crop="100">100%</button>
     <button class="small" data-crop="50">50%</button>
@@ -228,6 +231,7 @@ namespace PolarAlignLive.Remote {
     if (act !== 'iExp') $('iExp').value = st.exp;
     if (act !== 'iGain') $('iGain').value = st.gain;
     if (act !== 'iBin') $('iBin').value = st.bin;
+    if (act !== 'iPause') $('iPause').value = st.pause;
     var cs = document.querySelectorAll('[data-crop]');
     for (var i = 0; i < cs.length; i++) cs[i].classList.toggle('on', parseInt(cs[i].getAttribute('data-crop'), 10) === st.crop);
 
@@ -418,7 +422,7 @@ namespace PolarAlignLive.Remote {
   for (var j = 0; j < cols.length; j++) (function (b) { b.addEventListener('click', function () { colName = b.getAttribute('data-col'); applyTheme(); }); })(cols[j]);
   on('bDimUp', function () { dim += 0.1; applyTheme(); });
   on('bDimDn', function () { dim -= 0.1; applyTheme(); });
-  ['iExp:exp', 'iGain:gain', 'iBin:bin'].forEach(function (s) {
+  ['iExp:exp', 'iGain:gain', 'iBin:bin', 'iPause:pause'].forEach(function (s) {
     var p = s.split(':'); $(p[0]).addEventListener('change', function () { cmd(p[1], $(p[0]).value); });
   });
   on('bSound', function () { soundOn = !soundOn; ls('pal.sound', soundOn ? '1' : '0'); updToggles(); if (soundOn) beep(); });
