@@ -59,6 +59,8 @@ namespace PolarAlignLive.Remote {
                     ["canLive"] = Can(vm.StartLiveCommand),
                     ["canStop"] = Can(vm.StopCommand),
                     ["canReset"] = Can(vm.ResetCommand),
+                    ["beep"] = vm.BeepOn,
+                    ["flash"] = vm.FlashOn,
                     ["solveSeq"] = vm.SolveSeq
                 };
                 return JsonSerializer.Serialize(s);

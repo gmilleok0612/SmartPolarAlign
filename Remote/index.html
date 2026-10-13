@@ -23,8 +23,9 @@
   label { color: var(--dim); font-size: 14px; display: flex; align-items: center; gap: 6px; }
   .instr { font-size: 16px; margin: 6px 0 2px; }
   .frames { font-size: 13px; color: var(--dim); }
-  .line { font-size: 24px; font-weight: 700; margin: 6px 0 0; }
-  .adv { font-size: 18px; font-weight: 700; margin: 0 0 2px; }
+  .line { font-size: 24px; font-weight: 700; margin: 6px 0 0; transition: filter .6s ease-out; }
+  .adv { font-size: 18px; font-weight: 700; margin: 0 0 2px; transition: filter .6s ease-out; }
+  .flash { filter: brightness(2.4) drop-shadow(0 0 8px currentColor); transition: none !important; }
   .err { color: var(--dim); font-size: 17px; text-align: right; }
   .verdict { font-weight: 700; font-size: 16px; text-align: right; }
   .status { color: var(--dim); font-size: 15px; margin: 6px 0; min-height: 22px; word-break: break-word; }
@@ -133,7 +134,7 @@
   var pin = ls('pal.pin') || '';
   var colName = ls('pal.col') || 'red';
   var dim = parseFloat(ls('pal.dim') || '0.7');
-  var soundOn = ls('pal.sound') === '1';
+  var soundOn = ls('pal.sound') !== '0';
   var awakeOn = ls('pal.awake') === '1';
   var st = null, lastSeq = -1, failures = 0, audio = null, wake = null;
   var settingsOpen = ls('pal.settings') === '1';
@@ -227,9 +228,13 @@
     for (var i = 0; i < cs.length; i++) cs[i].classList.toggle('on', parseInt(cs[i].getAttribute('data-crop'), 10) === st.crop);
 
     if (st.solveSeq !== lastSeq) {
-      if (lastSeq !== -1 && st.solveSeq > lastSeq && soundOn) { beep(); try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {} }
+      if (lastSeq !== -1 && st.solveSeq > lastSeq) {
+        if (soundOn && st.beep !== false) { beep(); try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {} }
+        if (st.flash !== false) flash();
+      }
       lastSeq = st.solveSeq;
     }
+    updToggles();
     draw();
   }
 
@@ -309,7 +314,25 @@
   window.addEventListener('resize', draw);
 
   // ---------- sound / wake lock ----------
-  function beep() {
+  // The beep is a real <audio> element (a generated WAV): unlike Web Audio it is NOT muted by the iPhone silent switch.
+  var beepEl = null, beepReady = false;
+  function makeBeep() {
+    try {
+      var sr = 22050, n = Math.floor(sr * 0.14), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+      var tag = function (o, t) { for (var k = 0; k < t.length; k++) v.setUint8(o + k, t.charCodeAt(k)); };
+      tag(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      tag(36, 'data'); v.setUint32(40, n * 2, true);
+      for (var i = 0; i < n; i++) {
+        var env = Math.min(1, i / 200, (n - i) / 400);
+        v.setInt16(44 + i * 2, Math.sin(2 * Math.PI * 880 * i / sr) * env * 0.6 * 32767, true);
+      }
+      beepEl = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+      beepEl.preload = 'auto';
+    } catch (e) { beepEl = null; }
+  }
+  function webBeep() {
     try {
       if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
       var o = audio.createOscillator(), gn = audio.createGain();
@@ -317,8 +340,26 @@
       o.start(); o.stop(audio.currentTime + 0.12);
     } catch (e) {}
   }
+  function beep() {
+    if (!beepEl) { webBeep(); return; }
+    try {
+      beepEl.muted = false; beepEl.currentTime = 0;
+      var p = beepEl.play();
+      if (p && p.catch) p.catch(function () { webBeep(); });
+    } catch (e) { webBeep(); }
+  }
+  // Brighten the advice text for a moment each time Live view produces a new solution.
+  var flashTimer = null;
+  function flash() {
+    var ids = ['altLine', 'altAdv', 'azLine', 'azAdv'];
+    for (var i = 0; i < ids.length; i++) $(ids[i]).classList.add('flash');
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () {
+      for (var j = 0; j < ids.length; j++) $(ids[j]).classList.remove('flash');
+    }, 450);
+  }
   function updToggles() {
-    $('bSound').textContent = 'Phone beep: ' + (soundOn ? 'On' : 'Off');
+    $('bSound').textContent = 'Phone beep: ' + (soundOn ? 'On' : 'Off') + (st && st.beep === false ? ' (off in plugin)' : '');
     var canWake = !!(navigator.wakeLock);
     $('bAwake').textContent = canWake ? 'Keep screen on: ' + (awakeOn ? 'On' : 'Off') : 'Screen stays on: set in phone settings';
     $('bAwake').disabled = !canWake;
@@ -339,7 +380,17 @@
       if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
       if (audio.state === 'suspended') audio.resume();
     } catch (e) {}
+    try {
+      if (beepEl && !beepReady) {
+        beepReady = true;
+        beepEl.muted = true;
+        var p = beepEl.play();
+        var done = function () { try { beepEl.pause(); beepEl.currentTime = 0; beepEl.muted = false; } catch (e) {} };
+        if (p && p.then) p.then(done).catch(function () { beepEl.muted = false; beepReady = false; }); else done();
+      }
+    } catch (e) {}
   }
+  makeBeep();
   document.addEventListener('touchstart', unlockAudio, { passive: true });
   document.addEventListener('click', unlockAudio);
 
