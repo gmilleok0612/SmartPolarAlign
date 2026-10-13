@@ -74,10 +74,10 @@ namespace PolarAlignLive.Remote {
 <div class="row">
   <button id="bLive">Start Live</button>
   <button id="bStop">Stop Live</button>
-  <button id="bAuto">Auto Capture</button>
+  <button id="bAuto">Find Axis</button>
   <button id="bReset">Reset</button>
 </div>
-<div class="row"><button class="big" id="bAbort">ABORT SLEW</button></div>
+<div class="row"><button class="big" id="bAbort">All Stop</button></div>
 
 <div class="row"><button class="small" id="bSettings">Settings &#9662;</button></div>
 <div id="settings" class="hidden">
@@ -223,6 +223,7 @@ namespace PolarAlignLive.Remote {
     $('bAuto').disabled = !st.canAuto;
     $('bLive').disabled = !st.canLive;
     $('bStop').disabled = !st.canStop;
+    $('bAbort').disabled = !st.canAllStop;
     $('bReset').disabled = !st.canReset;
     $('bCal').disabled = !!st.busy && !st.calVisible;
     setText('bAltUnit', st.altUnit); setText('bAzUnit', st.azUnit);
