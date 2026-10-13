@@ -72,10 +72,9 @@ namespace PolarAlignLive.Remote {
 <div class="status" id="status"></div>
 
 <div class="row">
-  <button id="bAuto">Auto Capture</button>
-  <button id="bTrack">Tracking On</button>
   <button id="bLive">Start Live</button>
-  <button id="bStop">Stop</button>
+  <button id="bStop">Stop Live</button>
+  <button id="bAuto">Auto Capture</button>
   <button id="bReset">Reset</button>
 </div>
 <div class="row"><button class="big" id="bAbort">ABORT SLEW</button></div>
@@ -402,7 +401,6 @@ namespace PolarAlignLive.Remote {
   // ---------- wiring ----------
   function on(id, fn) { $(id).addEventListener('click', fn); }
   on('bAuto', function () { cmd('autocapture'); });
-  on('bTrack', function () { cmd('trackingon'); });
   on('bLive', function () { cmd('startlive'); });
   on('bStop', function () { cmd('stop'); });
   on('bReset', function () { cmd('reset'); });

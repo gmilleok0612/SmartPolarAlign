@@ -73,7 +73,6 @@ namespace PolarAlignLive.Remote {
                     ICommand c = null;
                     switch (name) {
                         case "autocapture": c = vm.AutoCaptureCommand; break;
-                        case "trackingon": c = vm.TrackingOnCommand; break;
                         case "startlive": c = vm.StartLiveCommand; break;
                         case "stop": c = vm.StopCommand; break;
                         case "reset": c = vm.ResetCommand; break;
