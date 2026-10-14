@@ -217,12 +217,61 @@ namespace PolarAlignLive {
         }
 
         private bool beepOn = true;
-        public string BeepText => beepOn ? "Live beep: On" : "Live beep: Off";
+        public string BeepText => beepOn ? "Live sound: On" : "Live sound: Off";
         /// <summary>Short beep so the user knows Live View just produced new advice.</summary>
-        private void Beep() {
-            if (!beepOn) return;
-            System.Threading.Tasks.Task.Run(() => { try { Console.Beep(880, 120); } catch { try { System.Media.SystemSounds.Beep.Play(); } catch { } } });
+        // What the user should do right now during Live: 0 = nothing shown, 1 = adjust now, 2 = hands off (picture being taken), 3 = solving.
+        private int livePhase;
+        private string livePhaseText = "";
+        public bool PhaseVisible => livePhase != 0;
+        public bool PhaseAdjust => livePhase == 1;
+        public string PhaseText => livePhaseText;
+        private void SetPhase(int phase, string text) {
+            if (livePhase == phase && livePhaseText == text) return;
+            livePhase = phase; livePhaseText = text;
+            RaisePropertyChanged(nameof(PhaseVisible)); RaisePropertyChanged(nameof(PhaseAdjust)); RaisePropertyChanged(nameof(PhaseText));
         }
+
+        // Soft bell-like cues (generated once, played through the Windows audio device, not the PC speaker).
+        private static readonly Dictionary<string, byte[]> soundCache = new Dictionary<string, byte[]>();
+        private static byte[] SoftWav(string key, double[] freqs, double noteSec) {
+            lock (soundCache) {
+                if (soundCache.TryGetValue(key, out var have)) return have;
+                const int sr = 22050;
+                int per = (int)(sr * noteSec), n = per * freqs.Length;
+                var ms = new System.IO.MemoryStream();
+                var w = new System.IO.BinaryWriter(ms);
+                w.Write(new[] { 'R', 'I', 'F', 'F' }); w.Write(36 + n * 2); w.Write(new[] { 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ' });
+                w.Write(16); w.Write((short)1); w.Write((short)1); w.Write(sr); w.Write(sr * 2); w.Write((short)2); w.Write((short)16);
+                w.Write(new[] { 'd', 'a', 't', 'a' }); w.Write(n * 2);
+                for (int f = 0; f < freqs.Length; f++) {
+                    for (int i = 0; i < per; i++) {
+                        double t = i / (double)sr;
+                        double att = Math.Min(1.0, i / (sr * 0.03)), rel = Math.Min(1.0, (per - i) / (sr * 0.03));
+                        double env = att * rel * Math.Exp(-3.2 * i / per);
+                        double smp = Math.Sin(2 * Math.PI * freqs[f] * t) + 0.25 * Math.Sin(4 * Math.PI * freqs[f] * t);
+                        w.Write((short)(smp * env * 0.26 * 32767));
+                    }
+                }
+                w.Flush();
+                var bytes = ms.ToArray();
+                soundCache[key] = bytes;
+                return bytes;
+            }
+        }
+        private void PlaySoft(string key, double[] freqs, double noteSec) {
+            if (!beepOn) return;
+            var bytes = SoftWav(key, freqs, noteSec);
+            System.Threading.Tasks.Task.Run(() => {
+                try { using (var sp = new System.Media.SoundPlayer(new System.IO.MemoryStream(bytes))) sp.PlaySync(); }
+                catch { try { System.Media.SystemSounds.Beep.Play(); } catch { } }
+            });
+        }
+        /// <summary>Soft rising pair: a new reading has arrived / adjust now.</summary>
+        private void Beep() => PlaySoft("up", new[] { 523.25, 659.25 }, 0.3);
+        /// <summary>Soft falling pair: the exposure is starting, hands off the mount.</summary>
+        private void BeepHandsOff() => PlaySoft("down", new[] { 659.25, 440.0 }, 0.26);
+        /// <summary>Single soft low note: two seconds left to finish the adjustment.</summary>
+        private void BeepWarn() => PlaySoft("warn", new[] { 440.0 }, 0.3);
         public ICommand CalContinueCommand { get; }
         public ICommand CalCancelCommand { get; }
         public ICommand ToggleSettingsCommand { get; }
@@ -487,7 +536,8 @@ namespace PolarAlignLive {
         public string AzAdviceText => Advice(MoveEastArcmin, azCal, azUnit, " (LEFT azimuth knob)", n => n > 0 ? "axis EAST" : "axis WEST");
 
         private string Advice(double needArcmin, double cal, int unit, string who, Func<double, string> effect) {
-            if (!HasSolution || cal == 0 || Math.Abs(needArcmin) < 0.5) return "";
+            if (!HasSolution || Math.Abs(needArcmin) < 0.5) return "";
+            if (cal == 0) return "Not calibrated \u2013 press Calibrate Adjustment Knobs";
             double u = needArcmin / cal;
             double m = Math.Abs(u);
             string amount = unit == 1 ? m.ToString("0.00", CultureInfo.InvariantCulture) + " turns" + (m < 0.25 ? $" (about {(m * 360).ToString("0", CultureInfo.InvariantCulture)}\u00B0 of knob rotation)" : "")
@@ -500,6 +550,10 @@ namespace PolarAlignLive {
             RaisePropertyChanged(nameof(AltUnitText)); RaisePropertyChanged(nameof(AzUnitText));
             RaisePropertyChanged(nameof(AltAdviceText)); RaisePropertyChanged(nameof(AzAdviceText));
         }
+
+        private string CalSummary() =>
+            (altCal != 0 ? "Altitude knob: calibrated." : "Altitude knob: NOT calibrated.") + "\n" +
+            (azCal != 0 ? "Azimuth knob: calibrated." : "Azimuth knob: NOT calibrated.") + "\n\nPress Calibrate Adjustment Knobs again to finish.";
 
         private void AfterCalChange(string msg) { SaveAutoSettings(); RaiseCalText(); Status = msg; }
 
@@ -602,10 +656,10 @@ namespace PolarAlignLive {
                     for (int tries = 0; tries < 4; tries++) {
                         turned += step;
                         CalText = head + (tries == 0 ? "" : "Not enough movement measured.\n\n") + "Move the " + (axisId == 1 ? "altitude knob " : "LEFT azimuth knob ") + CalStepText(unit) + " clockwise.";
-                        if (!await WaitForCalContinue(ct)) return;
+                        if (!await WaitForCalContinue(ct)) { finalMsg = "Calibration cancelled.\n\n" + CalSummary() ; return; }
 
                         CalText = head + "Taking frame to determine exact position in the sky after adjustment - please wait.";
-                        var end = await MeasureOnce(ct);
+                        var end = await MeasureOnce(CancellationToken.None);   // once you pressed Continue, the measurement always finishes so the turn is not wasted
                         if (!end.ok) { finalMsg = "Calibration stopped: the plate solve failed. Check focus and exposure, then try again."; return; }
                         moved = axisId == 1 ? start.up - end.up : start.east - end.east;   // how far the axis actually moved (arcmin)
                         NINA.Core.Utility.Logger.Info($"PolarAlignLive calibrate axis {axisId}: try {tries} end ok={end.ok} up={end.up:0.00} east={end.east:0.00} moved={moved:0.00} turned={turned}");
@@ -622,7 +676,7 @@ namespace PolarAlignLive {
                 finalMsg = $"Calibrated:\nAltitude {Math.Abs(altCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(altUnit).TrimEnd('s')}, azimuth {Math.Abs(azCal).ToString("0.0", CultureInfo.InvariantCulture)}\u2032 per {UnitLabel(azUnit).TrimEnd('s')}.\n\nMeasured: turning the altitude knob clockwise moves the axis {(altCal > 0 ? "UP" : "DOWN")}; turning the LEFT azimuth knob clockwise moves the axis {(azCal > 0 ? "EAST" : "WEST")}. If that is not what you saw, run the calibration again.\n\nStart Live View to view adjustments to center the pole.";
                 AfterCalChange("Knobs calibrated. Start Live View to see how far to turn each knob.");
             } catch (OperationCanceledException) {
-                Status = "Calibration cancelled.";
+                finalMsg = "Calibration cancelled.\n\n" + CalSummary();
             } catch (Exception ex) {
                 finalMsg = FriendlyError(ex);
             } finally {
@@ -936,8 +990,9 @@ namespace PolarAlignLive {
                 short pendingBin = Binning;
 
                 while (!liveStop && !ct.IsCancellationRequested) {
-                    if (pending == null) { pendingBin = Binning; pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, ""); }
+                    if (pending == null) { pendingBin = Binning; pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, ""); BeepHandsOff(); }
                     Status = "Exposing...";
+                    SetPhase(2, pauseSec <= 0 ? "HANDS OFF \u2013 exposures run continuously (set Pause above 0 to get time to adjust)" : "HANDS OFF \u2013 taking the picture");
                     var exposure = await pending;
                     pending = null;
                     short solveBin = pendingBin;
@@ -945,6 +1000,7 @@ namespace PolarAlignLive {
                     if (pauseSec <= 0) { pendingBin = Binning; pending = imagingMediator.CaptureImage(MakeSequence(), ct, progress, ""); }
 
                     Status = "Solving...";
+                    if (pauseSec > 0) SetPhase(3, "WAIT \u2013 picture taken, solving. The new reading is coming.");
                     var imageData = await exposure.ToImageData(progress, ct);
                     parameter.Binning = solveBin;
                     parameter.Coordinates = telescopeMediator.GetCurrentPosition();
@@ -984,6 +1040,8 @@ namespace PolarAlignLive {
                     string stamp = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
                     Status = "Live  (" + stamp + ")";
                     for (int left = pauseSec; left > 0 && !liveStop; left--) {
+                        if (left == 2 && pauseSec > 2) BeepWarn();
+                        SetPhase(1, left > 2 ? "ADJUST NOW \u2013 " + left + " s left" : "FINISH \u2013 " + left + " s, then hands off");
                         Status = "Live  (" + stamp + ")  -  next solve in " + left + " s, adjust now";
                         for (int tick = 0; tick < 4 && !liveStop; tick++) await Task.Delay(250, ct);
                     }
@@ -996,6 +1054,7 @@ namespace PolarAlignLive {
                     try { await pending; } catch { }
                     pending = null;
                 }
+                SetPhase(0, "");
                 Status = "Live is stopped. Make your adjustment, then press Start Live to continue.";
                 Instructions = "Live is stopped. The axis solution is kept - press Start Live to resume.";
             } catch (Exception cex) when (cex is OperationCanceledException || ct.IsCancellationRequested) {
@@ -1009,6 +1068,7 @@ namespace PolarAlignLive {
                 // Observe any exception from the abandoned exposure so it is not reported as unobserved.
                 if (pending != null) _ = pending.ContinueWith(t => { var ignored = t.Exception; }, TaskScheduler.Default);
                 liveRunning = false;
+                SetPhase(0, "");
                 IsBusy = false;
             }
         }
