@@ -260,8 +260,15 @@
                         </Grid.RowDefinitions>
 
                         <StackPanel Grid.Row="0" Margin="8,4,8,0" Visibility="{Binding InstructionsShown, Converter={StaticResource PalBool}}">
-                            <TextBlock Text="{Binding Instructions}" Style="{StaticResource PalLabel}" TextWrapping="Wrap" FontSize="14" />
-                            <TextBlock Style="{StaticResource PalDimLabel}" FontSize="12" TextWrapping="Wrap">
+                            <TextBlock Text="{Binding Instructions}" Style="{StaticResource PalLabel}" TextWrapping="Wrap" FontSize="12" />
+                            <TextBlock Text="{Binding CalNoteText}" FontSize="11" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource PalDimLabel}">
+                                        <Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed" /></Trigger></Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource PalDimLabel}" FontSize="11" TextWrapping="Wrap">
                                 <Run Text="{Binding FrameCountText, Mode=OneWay}" /><Run Text="   " /><Run Text="{Binding AxisQualityText, Mode=OneWay}" />
                             </TextBlock>
                         </StackPanel>
@@ -273,8 +280,8 @@
                                              Quality="{Binding AlignmentLevel}" South="{Binding SouthHemisphere}"
                                              MoveUp="{Binding MoveUpArcmin}" MoveEast="{Binding MoveEastArcmin}" HasSolution="{Binding HasSolution}" />
                             <StackPanel Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,0,0,0" IsHitTestVisible="False">
-                                <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalAdviceLabel}" FontSize="20" FontWeight="Bold" />
-                                <TextBlock Text="{Binding AltAdviceText}" FontSize="15" FontWeight="Bold">
+                                <TextBlock Text="{Binding MoveUpText}" Style="{StaticResource PalAdviceLabel}" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding AltAdviceText}" FontSize="12" FontWeight="Bold" TextWrapping="Wrap">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Foreground" Value="{Binding Theme.AdviceBrush}" />
@@ -285,8 +292,8 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalAdviceLabel}" FontSize="20" FontWeight="Bold" />
-                                <TextBlock Text="{Binding AzAdviceText}" FontSize="15" FontWeight="Bold">
+                                <TextBlock Text="{Binding MoveEastText}" Style="{StaticResource PalAdviceLabel}" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding AzAdviceText}" FontSize="12" FontWeight="Bold" TextWrapping="Wrap">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Foreground" Value="{Binding Theme.AdviceBrush}" />
