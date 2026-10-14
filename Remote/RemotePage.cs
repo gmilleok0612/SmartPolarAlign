@@ -34,6 +34,8 @@ namespace PolarAlignLive.Remote {
   .err { color: var(--dim); font-size: 17px; text-align: right; }
   .verdict { font-weight: 700; font-size: 16px; text-align: right; }
   .status { color: var(--dim); font-size: 15px; margin: 6px 0; min-height: 22px; word-break: break-word; }
+  .phase { border: 3px solid var(--c); border-radius: 8px; padding: 10px; margin: 6px 0; font-size: 22px; font-weight: 700; text-align: center; }
+  .phase.adjust { background: var(--c); color: #000; }
   canvas { display: block; width: 100%; background: #000; margin: 4px auto; }
   .panel { border: 3px solid var(--c); border-radius: 8px; padding: 12px; margin: 8px 0; background: #000; }
   .panel p { font-size: 19px; font-weight: 700; margin: 0 0 8px; white-space: pre-wrap; }
@@ -69,6 +71,7 @@ namespace PolarAlignLive.Remote {
   <div class="row"><button id="confirmYes">SLEW</button><button id="confirmNo">CANCEL</button></div>
 </div>
 
+<div class="phase hidden" id="phase"></div>
 <div class="status" id="status"></div>
 
 <div class="row">
@@ -114,7 +117,7 @@ namespace PolarAlignLive.Remote {
     <button class="small" id="bDimUp">+</button>
   </div>
   <div class="row">
-    <button id="bSound">Phone beep: Off</button>
+    <button id="bSound">Phone sound: Off</button>
     <button id="bAwake">Keep screen on: Off</button>
   </div>
 </div>
@@ -210,6 +213,11 @@ namespace PolarAlignLive.Remote {
     setText('err', st.totalText);
     setText('verdict', st.qualityText || '');
     setText('status', st.status || '');
+    setText('phase', st.phaseText || '');
+    if (st.phase === 2 && lastPhase !== 2 && lastPhase !== -1 && soundOn && st.beep !== false) playEl(offEl);
+    lastPhase = st.phase || 0;
+    $('phase').classList.toggle('hidden', !st.phase);
+    $('phase').classList.toggle('adjust', st.phase === 1);
 
     $('confirm').classList.toggle('hidden', !st.confirmPending);
     setText('confirmText', st.confirmText || '');
@@ -325,28 +333,43 @@ namespace PolarAlignLive.Remote {
 
   // ---------- sound / wake lock ----------
   // The beep is a real <audio> element (a generated WAV): unlike Web Audio it is NOT muted by the iPhone silent switch.
-  var beepEl = null, beepReady = false;
-  function makeBeep() {
+  var beepEl = null, beepReady = false, lastPhase = -1;
+  // Soft bell-like notes (sine + a quiet octave, smooth attack, gentle decay) so the cues are not annoying.
+  function makeWav(freqs, noteSec) {
     try {
-      var sr = 22050, n = Math.floor(sr * 0.14), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+      var sr = 22050, per = Math.floor(sr * noteSec), n = per * freqs.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
       var tag = function (o, t) { for (var k = 0; k < t.length; k++) v.setUint8(o + k, t.charCodeAt(k)); };
       tag(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); tag(8, 'WAVE'); tag(12, 'fmt ');
       v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
       v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
       tag(36, 'data'); v.setUint32(40, n * 2, true);
-      for (var i = 0; i < n; i++) {
-        var env = Math.min(1, i / 200, (n - i) / 400);
-        v.setInt16(44 + i * 2, Math.sin(2 * Math.PI * 880 * i / sr) * env * 0.6 * 32767, true);
+      for (var f = 0; f < freqs.length; f++) {
+        for (var i = 0; i < per; i++) {
+          var t = i / sr, att = Math.min(1, i / (sr * 0.03)), rel = Math.min(1, (per - i) / (sr * 0.03));
+          var env = att * rel * Math.exp(-3.2 * i / per);
+          var s = Math.sin(2 * Math.PI * freqs[f] * t) + 0.25 * Math.sin(4 * Math.PI * freqs[f] * t);
+          v.setInt16(44 + (f * per + i) * 2, s * env * 0.26 * 32767, true);
+        }
       }
-      beepEl = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
-      beepEl.preload = 'auto';
-    } catch (e) { beepEl = null; }
+      var el = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+      el.preload = 'auto';
+      return el;
+    } catch (e) { return null; }
+  }
+  var offEl = null, offReady = false;
+  function makeBeep() {
+    beepEl = makeWav([523.25, 659.25], 0.3);     // rising pair: new reading / adjust now
+    offEl = makeWav([659.25, 440.0], 0.26);      // falling pair: hands off
+  }
+  function playEl(el) {
+    if (!el) return;
+    try { el.muted = false; el.currentTime = 0; var p = el.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
   }
   function webBeep() {
     try {
       if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
       var o = audio.createOscillator(), gn = audio.createGain();
-      o.frequency.value = 880; gn.gain.value = 0.15; o.connect(gn); gn.connect(audio.destination);
+      o.frequency.value = 659; gn.gain.value = 0.08; o.connect(gn); gn.connect(audio.destination);
       o.start(); o.stop(audio.currentTime + 0.12);
     } catch (e) {}
   }
@@ -369,7 +392,7 @@ namespace PolarAlignLive.Remote {
     }, 450);
   }
   function updToggles() {
-    $('bSound').textContent = 'Phone beep: ' + (soundOn ? 'On' : 'Off') + (st && st.beep === false ? ' (off in plugin)' : '');
+    $('bSound').textContent = 'Phone sound: ' + (soundOn ? 'On' : 'Off') + (st && st.beep === false ? ' (off in plugin)' : '');
     var canWake = !!(navigator.wakeLock);
     $('bAwake').textContent = canWake ? 'Keep screen on: ' + (awakeOn ? 'On' : 'Off') : 'Screen stays on: set in phone settings';
     $('bAwake').disabled = !canWake;
@@ -397,6 +420,15 @@ namespace PolarAlignLive.Remote {
         var p = beepEl.play();
         var done = function () { try { beepEl.pause(); beepEl.currentTime = 0; beepEl.muted = false; } catch (e) {} };
         if (p && p.then) p.then(done).catch(function () { beepEl.muted = false; beepReady = false; }); else done();
+      }
+    } catch (e) {}
+    try {
+      if (offEl && !offReady) {
+        offReady = true;
+        offEl.muted = true;
+        var p2 = offEl.play();
+        var done2 = function () { try { offEl.pause(); offEl.currentTime = 0; offEl.muted = false; } catch (e) {} };
+        if (p2 && p2.then) p2.then(done2).catch(function () { offEl.muted = false; offReady = false; }); else done2();
       }
     } catch (e) {}
   }

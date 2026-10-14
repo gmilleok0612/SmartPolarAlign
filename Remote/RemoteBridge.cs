@@ -26,6 +26,8 @@ namespace PolarAlignLive.Remote {
             return OnUi(() => {
                 var s = new Dictionary<string, object> {
                     ["status"] = vm.Status ?? "",
+                    ["phase"] = vm.PhaseVisible ? (vm.PhaseAdjust ? 1 : 2) : 0,
+                    ["phaseText"] = vm.PhaseText ?? "",
                     ["instructions"] = vm.Instructions ?? "",
                     ["instructionsShown"] = vm.InstructionsShown,
                     ["frames"] = vm.FrameCountText ?? "",
