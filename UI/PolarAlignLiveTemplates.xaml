@@ -325,6 +325,27 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
+                            <Border Margin="0,0,0,4" Padding="8,4" CornerRadius="3" BorderThickness="3" BorderBrush="{Binding Theme.TextBrush}"
+                                    Visibility="{Binding PhaseVisible, Converter={StaticResource PalBool}}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PhaseAdjust}" Value="True"><Setter Property="Background" Value="{Binding Theme.TextBrush}" /></DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding PhaseText}" FontSize="18" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Theme.TextBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding PhaseAdjust}" Value="True"><Setter Property="Foreground" Value="Black" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
                             <TextBlock Text="{Binding Status}" Style="{StaticResource PalDimLabel}" FontSize="13" TextWrapping="Wrap" />
                         </StackPanel>
 
