@@ -537,7 +537,7 @@ namespace PolarAlignLive {
 
         private string Advice(double needArcmin, double cal, int unit, string who, Func<double, string> effect) {
             if (!HasSolution || Math.Abs(needArcmin) < 0.5) return "";
-            if (cal == 0) return "Not calibrated \u2013 press Calibrate Adjustment Knobs";
+            if (cal == 0) return "not calibrated";
             double u = needArcmin / cal;
             double m = Math.Abs(u);
             string amount = unit == 1 ? m.ToString("0.00", CultureInfo.InvariantCulture) + " turns" + (m < 0.25 ? $" (about {(m * 360).ToString("0", CultureInfo.InvariantCulture)}\u00B0 of knob rotation)" : "")
@@ -547,10 +547,12 @@ namespace PolarAlignLive {
         }
 
         /// <summary>Shown when Live starts: without calibration there is no knob guidance (turns/tics/degrees), only the distances.</summary>
+        private string calNoteText = "";
+        public string CalNoteText { get => calNoteText; private set { calNoteText = value; RaisePropertyChanged(); } }
         private string CalNote() {
             if (altCal != 0 && azCal != 0) return "";
-            string which = altCal == 0 && azCal == 0 ? "The adjustment knobs are not calibrated" : altCal == 0 ? "The altitude knob is not calibrated" : "The azimuth knob is not calibrated";
-            return "\n\nNOTE: " + which + ", so knob guidance (how far and which way to turn) is not available - only the distance to the pole. Stop Live and press Calibrate Adjustment Knobs first for turn-by-turn guidance.";
+            string which = altCal == 0 && azCal == 0 ? "Knobs not calibrated" : altCal == 0 ? "Altitude knob not calibrated" : "Azimuth knob not calibrated";
+            return which + ": distance only, no turn guidance. Stop Live, then Calibrate Adjustment Knobs.";
         }
 
         private void RaiseCalText() {
@@ -986,7 +988,8 @@ namespace PolarAlignLive {
             liveStop = false;
             liveRunning = true;
             IsBusy = true;
-            Instructions = "Adjust altitude/azimuth. Dot = where your RA axis points; bullseye = pole." + CalNote();
+            Instructions = "Adjust altitude/azimuth. Dot = where your RA axis points; bullseye = pole.";
+            CalNoteText = CalNote();
             Task<IExposureData> pending = null;
             try {
                 var solver = BuildSolver(false, out var parameter, out _);
@@ -1079,6 +1082,7 @@ namespace PolarAlignLive {
                 // Observe any exception from the abandoned exposure so it is not reported as unobserved.
                 if (pending != null) _ = pending.ContinueWith(t => { var ignored = t.Exception; }, TaskScheduler.Default);
                 liveRunning = false;
+                CalNoteText = "";
                 SetPhase(0, "");
                 IsBusy = false;
             }
