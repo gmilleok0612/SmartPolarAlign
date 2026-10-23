@@ -26,7 +26,7 @@ namespace PolarAlignLive.Remote {
   button.small { flex: 0 0 auto; min-height: 40px; padding: 8px 14px; }
   input { font: inherit; font-size: 17px; color: var(--c); background: #000; border: 2px solid var(--dim); border-radius: 6px; padding: 8px; width: 78px; }
   label { color: var(--dim); font-size: 14px; display: flex; align-items: center; gap: 6px; }
-  .instr { font-size: 16px; margin: 6px 0 2px; }
+  .instr { font-size: 16px; margin: 6px 0 2px; white-space: pre-wrap; }
   .frames { font-size: 13px; color: var(--dim); }
   .line { font-size: 24px; font-weight: 700; margin: 6px 0 0; transition: filter .6s ease-out; }
   .adv { font-size: 18px; font-weight: 700; margin: 0 0 2px; transition: filter .6s ease-out; }

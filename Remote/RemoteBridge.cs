@@ -28,7 +28,7 @@ namespace PolarAlignLive.Remote {
                     ["status"] = vm.Status ?? "",
                     ["phase"] = vm.PhaseVisible ? (vm.PhaseAdjust ? 1 : 2) : 0,
                     ["phaseText"] = vm.PhaseText ?? "",
-                    ["instructions"] = vm.Instructions ?? "",
+                    ["instructions"] = (vm.Instructions ?? "") + (string.IsNullOrEmpty(vm.CalNoteText) ? "" : "\n" + vm.CalNoteText),
                     ["instructionsShown"] = vm.InstructionsShown,
                     ["frames"] = vm.FrameCountText ?? "",
                     ["axisCheck"] = vm.AxisQualityText ?? "",
