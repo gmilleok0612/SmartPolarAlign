@@ -125,8 +125,8 @@
 </div>
 
 <div id="pin">
-  <div style="font-size:20px">Enter the access PIN shown in Polar Align Live settings on the NINA PC.</div>
-  <input id="pinIn" inputmode="numeric" autocomplete="off">
+  <div style="font-size:20px">Enter the pairing code shown in Polar Align Live settings on the NINA PC.</div>
+  <input id="pinIn" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="7">
   <button class="big" id="pinOk">Connect</button>
   <div id="pinMsg" class="status"></div>
 </div>
@@ -136,7 +136,7 @@
   var $ = function (id) { return document.getElementById(id); };
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} return null; }
 
-  var pin = ls('pal.pin') || '';
+  var sess = ls('pal.sess') || '';
   var colName = ls('pal.col') || 'red';
   var dim = parseFloat(ls('pal.dim') || '0.7');
   var soundOn = ls('pal.sound') !== '0';
@@ -162,25 +162,25 @@
   // ---------- network ----------
   function api(path, opts) {
     opts = opts || {};
-    opts.headers = { 'X-Pin': pin };
+    opts.headers = { 'X-Session': sess };
     opts.cache = 'no-store';
     return fetch(path, opts);
   }
   function cmd(name, arg) {
     return api('/api/cmd', { method: 'POST', body: name + '|' + (arg === undefined ? '' : arg) }).then(function (r) {
-      if (r.status === 401) { showPin(''); }
+      if (r.status === 401) { sess = ''; ls('pal.sess', ''); showPin('Session ended. Enter a pairing code.'); }
       return r.text();
     }).then(poll).catch(function () {});
   }
 
-  function showPin(msg) { $('pin').style.display = 'block'; $('pinMsg').textContent = msg || ''; }
+  function showPin(msg) { $('pin').style.display = 'block'; if (msg) $('pinMsg').textContent = msg; }
 
   var polling = false;
   function poll() {
     if (polling) return Promise.resolve();
     polling = true;
     return api('/api/state').then(function (r) {
-      if (r.status === 401) { showPin(pin ? 'Wrong PIN.' : ''); throw new Error('401'); }
+      if (r.status === 401) { var had = sess; sess = ''; ls('pal.sess', ''); if (had) showPin('Session ended. Enter a pairing code.'); else showPin(''); throw new Error('401'); }
       return r.json();
     }).then(function (j) {
       failures = 0; st = j; $('pin').style.display = 'none'; render();
@@ -458,7 +458,18 @@
   on('bAwake', function () { awakeOn = !awakeOn; ls('pal.awake', awakeOn ? '1' : '0'); updToggles(); setWake(); });
   on('bSettings', function () { settingsOpen = !settingsOpen; ls('pal.settings', settingsOpen ? '1' : '0'); showSettings(); });
   function showSettings() { $('settings').classList.toggle('hidden', !settingsOpen); $('bSettings').innerHTML = 'Settings ' + (settingsOpen ? '&#9652;' : '&#9662;'); }
-  on('pinOk', function () { pin = $('pinIn').value.trim(); ls('pal.pin', pin); $('pinMsg').textContent = 'Connecting...'; poll(); });
+  on('pinOk', function () {
+    var code = $('pinIn').value.trim();
+    $('pinMsg').textContent = 'Connecting...';
+    fetch('/api/pair', { method: 'POST', body: code, cache: 'no-store' }).then(function (r) {
+      return r.text().then(function (t) {
+        if (r.status === 200) { sess = t; ls('pal.sess', sess); $('pinIn').value = ''; $('pinMsg').textContent = ''; poll(); }
+        else if (r.status === 429) { var n = (t.split('|')[1] || '60'); $('pinMsg').textContent = 'Too many wrong codes. Wait ' + n + ' seconds, then try again.'; }
+        else if (t === 'expired') { $('pinMsg').textContent = 'The code has expired. Press New pairing code on the NINA PC.'; }
+        else { $('pinMsg').textContent = 'Wrong code.'; }
+      });
+    }).catch(function () { $('pinMsg').textContent = 'Could not reach the NINA PC.'; });
+  });
 
   showSettings(); updToggles(); applyTheme(); setWake(); poll();
 })();

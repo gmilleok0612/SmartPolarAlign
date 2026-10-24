@@ -10,22 +10,23 @@ namespace PolarAlignLive.Remote {
 
     /// <summary>
     /// Minimal HTTP server (plain TcpListener, so no admin rights or URL reservation are needed) that serves the phone web page
-    /// and a tiny JSON API: GET /api/state, POST /api/cmd (body "name|arg"). Every API call needs the PIN in the X-Pin header.
+    /// and a tiny JSON API: POST /api/pair (body = the pairing code shown on the NINA PC; returns a session token),
+    /// GET /api/state and POST /api/cmd (body "name|arg"). The state and command calls need the session token in the X-Session header.
     /// </summary>
     internal sealed class RemoteServer {
 
         private readonly Func<string> getState;
         private readonly Func<string, string, string> runCommand;
-        private readonly Func<string> getPin;
+        private readonly RemoteAuth auth;
         private TcpListener listener;
         private CancellationTokenSource cts;
 
         public string LastError { get; private set; }
 
-        public RemoteServer(Func<string> getState, Func<string, string, string> runCommand, Func<string> getPin) {
+        public RemoteServer(Func<string> getState, Func<string, string, string> runCommand, RemoteAuth auth) {
             this.getState = getState;
             this.runCommand = runCommand;
-            this.getPin = getPin;
+            this.auth = auth;
         }
 
         public bool Start(int port) {
@@ -118,11 +119,19 @@ namespace PolarAlignLive.Remote {
                         }
                         if (path == "/favicon.ico") { await Send(s, 204, "text/plain", "", timeout.Token); return; }
 
+                        if (path == "/api/pair" && method == "POST") {
+                            var res = auth.TryPair(body, out var token, out var retry);
+                            if (res == PairResult.Ok) await Send(s, 200, "text/plain", token, timeout.Token);
+                            else if (res == PairResult.LockedOut) await Send(s, 429, "text/plain", "locked|" + retry, timeout.Token);
+                            else if (res == PairResult.Expired) await Send(s, 401, "text/plain", "expired", timeout.Token);
+                            else await Send(s, 401, "text/plain", "wrong", timeout.Token);
+                            return;
+                        }
+
                         if (path == "/api/state" || path == "/api/cmd") {
-                            string pin = getPin();
-                            headers.TryGetValue("X-Pin", out var given);
-                            if (!string.IsNullOrEmpty(pin) && !string.Equals(pin, given ?? "", StringComparison.Ordinal)) {
-                                await Send(s, 401, "text/plain", "pin", timeout.Token);
+                            headers.TryGetValue("X-Session", out var given);
+                            if (!auth.ValidateSession(given)) {
+                                await Send(s, 401, "text/plain", "session", timeout.Token);
                                 return;
                             }
                             if (path == "/api/state" && method == "GET") {
@@ -145,7 +154,7 @@ namespace PolarAlignLive.Remote {
 
         private static async Task Send(NetworkStream s, int code, string type, string body, CancellationToken ct) {
             byte[] data = Encoding.UTF8.GetBytes(body ?? "");
-            string reason = code == 200 ? "OK" : code == 204 ? "No Content" : code == 401 ? "Unauthorized" : code == 404 ? "Not Found" : "Error";
+            string reason = code == 200 ? "OK" : code == 204 ? "No Content" : code == 401 ? "Unauthorized" : code == 404 ? "Not Found" : code == 413 ? "Payload Too Large" : code == 429 ? "Too Many Requests" : "Error";
             string head = "HTTP/1.1 " + code + " " + reason + "\r\n" +
                           "Content-Type: " + type + "\r\n" +
                           "Content-Length: " + data.Length + "\r\n" +
