@@ -103,7 +103,7 @@ namespace PolarAlignLive {
             DimmerUpCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(0.1));
             DimmerDownCommand = new RelayCommand(() => NightTheme.Instance.StepDimmer(-0.1));
             ToggleRemoteCommand = new RelayCommand(() => { RemoteEnabled = !RemoteEnabled; });
-            if (remotePin == 0) { remotePin = new Random().Next(1000, 10000); SaveAutoSettings(); }
+            NewRemoteCodeCommand = new RelayCommand(() => { remoteAuth.NewCode(); ApplyRemote(); });
             ApplyRemote();
         }
 
@@ -112,19 +112,17 @@ namespace PolarAlignLive {
         private PolarAlignLive.Remote.RemoteServer remoteServer;
         private bool remoteEnabled;
         private int remotePort = 5050;
-        private int remotePin;
+        private readonly PolarAlignLive.Remote.RemoteAuth remoteAuth = new PolarAlignLive.Remote.RemoteAuth();
+        private bool remoteWasOn;
         private string remoteMessage = "";
         public ICommand ToggleRemoteCommand { get; }
+        public ICommand NewRemoteCodeCommand { get; }
 
         public bool RemoteEnabled { get => remoteEnabled; set { remoteEnabled = value; SaveAutoSettings(); ApplyRemote(); } }
         public string RemoteToggleText => remoteEnabled ? "Phone access: On" : "Phone access: Off";
         public string RemotePortText {
             get => remotePort.ToString(CultureInfo.InvariantCulture);
             set { if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) && v >= 1024 && v <= 65535) { remotePort = v; SaveAutoSettings(); ApplyRemote(); } RaisePropertyChanged(); }
-        }
-        public string RemotePinText {
-            get => remotePin.ToString(CultureInfo.InvariantCulture);
-            set { if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) && v >= 1 && v <= 999999) { remotePin = v; SaveAutoSettings(); ApplyRemote(); } RaisePropertyChanged(); }
         }
         public string RemoteInfoText => remoteMessage;
 
@@ -149,16 +147,21 @@ namespace PolarAlignLive {
             try {
                 if (remoteServer == null) {
                     var bridge = new PolarAlignLive.Remote.RemoteBridge(this);
-                    remoteServer = new PolarAlignLive.Remote.RemoteServer(bridge.BuildState, bridge.RunCommand,
-                        () => remotePin.ToString(CultureInfo.InvariantCulture));
+                    remoteServer = new PolarAlignLive.Remote.RemoteServer(bridge.BuildState, bridge.RunCommand, remoteAuth);
                 }
                 if (remoteEnabled) {
                     if (remoteServer.Start(remotePort)) {
+                        // A fresh random pairing code every time phone access is switched on (or after it has expired).
+                        if (!remoteWasOn || !remoteAuth.HasValidCode) remoteAuth.NewCode();
+                        remoteWasOn = true;
                         string ips = LocalAddresses();
-                        remoteMessage = "Open on your phone (same Wi-Fi): http://" + ips.Replace(" or ", ":" + remotePort + " or http://") + ":" + remotePort + "   PIN " + remotePin;
+                        remoteMessage = "Open on your phone (same Wi-Fi): http://" + ips.Replace(" or ", ":" + remotePort + " or http://") + ":" + remotePort +
+                                        "\nPairing code: " + remoteAuth.DisplayCode + " (6 digits; type it on the phone once; valid 15 minutes; press New pairing code for another).";
                     } else remoteMessage = "Phone access could not start: " + remoteServer.LastError + " Try another port.";
                 } else {
                     remoteServer.Stop();
+                    remoteAuth.Clear();
+                    remoteWasOn = false;
                     remoteMessage = "";
                 }
             } catch (Exception ex) { remoteMessage = "Phone access error: " + ex.Message; }
@@ -396,7 +399,6 @@ namespace PolarAlignLive {
                     else if (kv[0] == "flash") flashOn = v != 0;
                     else if (kv[0] == "remote") remoteEnabled = v != 0;
                     else if (kv[0] == "rport") remotePort = (int)Math.Max(1024, Math.Min(65535, v));
-                    else if (kv[0] == "rpin") remotePin = (int)Math.Max(0, Math.Min(999999, v));
                     else if (kv[0] == "altcal2") altCal = v;
                     else if (kv[0] == "azcal2") azCal = v;
                 }
@@ -417,7 +419,6 @@ namespace PolarAlignLive {
                     "flash=" + (flashOn ? "1" : "0"),
                     "remote=" + (remoteEnabled ? "1" : "0"),
                     "rport=" + remotePort.ToString(CultureInfo.InvariantCulture),
-                    "rpin=" + remotePin.ToString(CultureInfo.InvariantCulture),
                     "altunit=" + altUnit.ToString(CultureInfo.InvariantCulture),
                     "azunit=" + azUnit.ToString(CultureInfo.InvariantCulture),
                     "altcal2=" + altCal.ToString("R", CultureInfo.InvariantCulture),
@@ -449,6 +450,7 @@ namespace PolarAlignLive {
         private TaskCompletionSource<bool> confirmTcs;
         private bool autoRunning;
         private volatile bool allStop;
+        private volatile MoveGate moveGate;
         private const string AllStopDoneText = "All Stop. The mount was stopped; the last exposure and solve were allowed to finish. Press Find Axis to start again.";
 
         private bool isBusy;
@@ -485,7 +487,7 @@ namespace PolarAlignLive {
             (Math.Abs(MoveEastArcmin) < 0.5 ? "AZ  OK" : $"AZ  swing axis {(MoveEastArcmin > 0 ? "EAST" : "WEST")}  {Fmt(Math.Abs(MoveEastArcmin))}");
 
         /// <summary>Fixed verdict (not user-adjustable): under 1' excellent, 1-3' good enough for guided imaging.</summary>
-        public int AlignmentLevel => !HasSolution ? 0 : TotalErrorArcmin < 1.0 ? 2 : TotalErrorArcmin <= 3.0 ? 1 : 0;
+        public int AlignmentLevel => !HasSolution || axis == null ? 0 : TotalErrorArcmin < 1.0 ? 2 : TotalErrorArcmin <= 3.0 ? 1 : 0;
         public string AlignmentQualityText => AlignmentLevel == 2 ? "ALIGNMENT EXCELLENT" : AlignmentLevel == 1 ? "ALIGNMENT GOOD ENOUGH FOR GUIDING" : "";
 
         public string TotalErrorText => !HasSolution ? "Polar error  --" : $"Polar error  {Fmt(TotalErrorArcmin)}";
@@ -838,12 +840,29 @@ namespace PolarAlignLive {
                 return true;
             }
 
-            axis = PolarMath.SolveAxis(frames, SouthHemisphere);
-            bool good = axis.ResidualDeg < 0.1 && axis.RotationDeg >= 15 &&
-                        (double.IsNaN(axis.RejectedResidualDeg) || axis.RejectedResidualDeg > 3 * axis.ResidualDeg);
-            AxisQualityText = $"Axis check: residual {axis.ResidualDeg * 60:0.0}′, rotation {axis.RotationDeg:0}°, PA sign {(axis.PaSign > 0 ? "+" : "-")}" +
-                              (good ? " (good)" : " (POOR - consider Reset and use larger RA moves)");
-            NINA.Core.Utility.Logger.Info($"PolarAlignLive axis: residual={axis.ResidualDeg * 60:0.0}' rotation={axis.RotationDeg:0.0} paSign={axis.PaSign} rejectedResidual={axis.RejectedResidualDeg * 60:0.0}' good={good}");
+            var solved = PolarMath.SolveAxis(frames, SouthHemisphere);
+            bool good = solved.ResidualDeg < 0.1 && solved.RotationDeg >= 15 &&
+                        (double.IsNaN(solved.RejectedResidualDeg) || solved.RejectedResidualDeg > 3 * solved.ResidualDeg);
+            string check = $"residual {solved.ResidualDeg * 60:0.0}′, rotation {solved.RotationDeg:0}°, PA sign {(solved.PaSign > 0 ? "+" : "-")}";
+            NINA.Core.Utility.Logger.Info($"PolarAlignLive axis: residual={solved.ResidualDeg * 60:0.0}' rotation={solved.RotationDeg:0.0} paSign={solved.PaSign} rejectedResidual={solved.RejectedResidualDeg * 60:0.0}' good={good}");
+
+            if (!good) {
+                // An unreliable axis must never produce alignment guidance: throw it away and require a fresh capture.
+                axis = null;
+                frames.Clear();
+                mountDecs.Clear();
+                HasSolution = false;
+                MoveUpArcmin = 0; MoveEastArcmin = 0; TotalErrorArcmin = 0;
+                FrameCountText = "Frames: 0 / 3";
+                AxisQualityText = "Axis check FAILED (" + check + "). The result was rejected.";
+                Status = "Axis rejected: the three frames do not give a reliable axis.";
+                Instructions = "No alignment guidance is given from an unreliable axis. Check focus, exposure and plate solving, then press Find Axis again.";
+                NotifyCommands();
+                return false;
+            }
+
+            axis = solved;
+            AxisQualityText = "Axis check: " + check + " (good)";
             Status = "Axis found.";
             Instructions = "Press Start Live, then adjust the mount's altitude/azimuth bolts until the arrows reach zero. Do not move RA/Dec now.";
             return true;
@@ -888,6 +907,9 @@ namespace PolarAlignLive {
             cts = new CancellationTokenSource();
             var ct = cts.Token;
             allStop = false;
+            // Every movement of this run goes through the gate, so All Stop blocks all of them (including the tracking wait and the reposition slew).
+            var gate = new MoveGate(ct);
+            moveGate = gate;
             autoRunning = true;
             IsBusy = true;
             try {
@@ -913,13 +935,15 @@ namespace PolarAlignLive {
 
                 if (trackingWasOff) {
                     Status = "Turning mount tracking on...";
-                    bool on = telescopeMediator.SetTrackingEnabled(true);
-                    await Task.Delay(1500, ct);
-                    if (!on || !telescopeMediator.GetInfo().TrackingEnabled) {
+                    var trk = await gate.StartTrackingAsync(() => telescopeMediator.SetTrackingEnabled(true),
+                                                            () => telescopeMediator.GetInfo().TrackingEnabled, 1500);
+                    if (trk == MoveOutcome.Stopped) { Status = AllStopDoneText; return; }
+                    if (trk != MoveOutcome.Done) {
                         Status = "Could not turn tracking on. Enable it on the mount, then try again. The mount was not moved.";
                         return;
                     }
                 }
+                if (gate.IsStopped) { Status = AllStopDoneText; return; }
 
                 var pier = telescopeMediator.GetInfo().SideOfPier;
 
@@ -931,22 +955,22 @@ namespace PolarAlignLive {
                     }
                     Status = $"Moving to safe start RA {RaText(plan.StartRaDeg)}...";
                     var start = new Coordinates(Angle.ByDegree(plan.StartRaDeg), Angle.ByDegree(plan.DecDeg), Epoch.JNOW);
-                    bool startDone = await telescopeMediator.SlewToCoordinatesAsync(start, ct);
-                    if (allStop) { Status = AllStopDoneText; return; }
-                    if (!startDone) { Status = "Slew did not complete."; return; }
+                    var startRes = await gate.SlewAsync(tok => telescopeMediator.SlewToCoordinatesAsync(start, tok), () => telescopeMediator.StopSlew());
+                    if (startRes == MoveOutcome.Stopped) { Status = AllStopDoneText; return; }
+                    if (startRes != MoveOutcome.Done) { Status = "Slew did not complete."; return; }
                     if (!telescopeMediator.GetInfo().SideOfPier.Equals(pier)) {
                         Status = "Pier side changed during the slew. Stopped. Check the mount and Reset.";
                         return;
                     }
                     Status = "Settling...";
-                    await Task.Delay(3000, ct);
+                    await gate.Delay(3000);
                 }
-                if (allStop) { Status = AllStopDoneText; return; }
+                if (gate.IsStopped) { Status = AllStopDoneText; return; }
 
                 if (!await CaptureCore(ct)) return;
 
                 for (int k = 0; k < 2; k++) {
-                    if (allStop) { Status = AllStopDoneText; return; }
+                    if (gate.IsStopped) { Status = AllStopDoneText; return; }
                     // Re-verify right before each slew with the current clock.
                     if (!SlewPlanner.Check(plan.RaDeg[k], plan.DecDeg, astro.Latitude, astro.Longitude, DateTime.UtcNow,
                                            plan.HaSign, MinAltDeg, MaxAltDeg, out var why, out _, out _)) {
@@ -955,27 +979,29 @@ namespace PolarAlignLive {
                     }
                     Status = $"Slewing RA to {RaText(plan.RaDeg[k])} (move {k + 1} of 2)...";
                     var target = new Coordinates(Angle.ByDegree(plan.RaDeg[k]), Angle.ByDegree(plan.DecDeg), Epoch.JNOW);
-                    bool done = await telescopeMediator.SlewToCoordinatesAsync(target, ct);
-                    if (allStop) { Status = AllStopDoneText; return; }
-                    if (!done) { Status = "Slew did not complete."; return; }
+                    var slewRes = await gate.SlewAsync(tok => telescopeMediator.SlewToCoordinatesAsync(target, tok), () => telescopeMediator.StopSlew());
+                    if (slewRes == MoveOutcome.Stopped) { Status = AllStopDoneText; return; }
+                    if (slewRes != MoveOutcome.Done) { Status = "Slew did not complete."; return; }
                     if (!telescopeMediator.GetInfo().SideOfPier.Equals(pier)) {
                         Status = "Pier side changed during the slew. Stopped. Check the mount and Reset.";
                         return;
                     }
                     Status = "Settling...";
-                    await Task.Delay(3000, ct);
-                    if (allStop) { Status = AllStopDoneText; return; }
+                    await gate.Delay(3000);
+                    if (gate.IsStopped) { Status = AllStopDoneText; return; }
                     if (!await CaptureCore(ct)) return;
                 }
             } catch (OperationCanceledException) {
                 try { telescopeMediator.StopSlew(); } catch { }
-                Status = "Cancelled. Mount slew stopped.";
+                Status = gate.IsStopped ? AllStopDoneText : "Cancelled. Mount slew stopped.";
             } catch (Exception ex) {
                 try { telescopeMediator.StopSlew(); } catch { }
-                Status = allStop ? AllStopDoneText : FriendlyError(ex);
+                Status = gate.IsStopped ? AllStopDoneText : FriendlyError(ex);
             } finally {
                 ConfirmPending = false;
                 autoRunning = false;
+                moveGate = null;
+                gate.Dispose();
                 IsBusy = false;
             }
         }
@@ -1092,6 +1118,7 @@ namespace PolarAlignLive {
         /// exposure / download / plate solve in progress - those finish - and Find Axis then ends before the next move.</summary>
         private void AbortSlew() {
             allStop = true;
+            try { moveGate?.Stop(); } catch { }
             try { telescopeMediator.StopSlew(); } catch (Exception ex) { NINA.Core.Utility.Logger.Info("PolarAlignLive all stop: " + ex.Message); }
             try { confirmTcs?.TrySetResult(false); } catch { }
             Status = "ALL STOP - mount stopped. Letting the current exposure and solve finish...";

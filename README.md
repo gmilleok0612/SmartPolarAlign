@@ -4,23 +4,30 @@ Polar Align Pro style bullseye + arrows, driven by plate solves instead of a com
 Builds on GitHub Actions (no local .NET toolchain needed); NINA interfaces were read from NINA's real source.
 
 ## Build / install
-1. Open `PolarAlignLive.csproj`, pin the `NINA.*` package versions to your installed NINA (currently wildcard `3.*`).
+1. The `NINA.*` packages in `PolarAlignLive.csproj` are pinned to NINA 3.2.0.9001 (the version this plugin is built and tested against). The minimum NINA version is 3.2.0.9001 in `Properties/AssemblyInfo.cs` and in the manifest; keep the three in step.
 2. Build Release. Copy `PolarAlignLive.dll` to `%LOCALAPPDATA%\NINA\Plugins\<NINA version folder>\`.
 3. Restart NINA. Imaging tab > dock panel list > "Polar Align Live".
 
 ## Use
 1. Connect camera + mount. Set up plate solver in NINA options. Mount tracking is switched on automatically if it is off.
 2. Point anywhere solvable. Polaris is NOT needed. Press Find Axis: after your confirmation the mount slews in RA only
-   and takes three frames; the plugin derives the RA axis and checks it.
+   and takes three frames; the plugin derives the RA axis and checks it. If the check fails the axis is rejected and no guidance
+   is shown: press Find Axis again. All Stop blocks every further movement of the run, including the tracking wait and the first reposition slew.
 3. (Optional) Settings > pick each knob's unit (tics / turns / degrees) > Calibrate Adjustment Knobs and follow the window.
 4. Start Live. Adjust the mount's alt/az bolts until both arrows read OK. Dot = your RA axis, bullseye = pole of date.
    Arrows/text say which way to move the AXIS (raise/lower, swing east/west, as seen facing the pole - facing south in the southern hemisphere, where the bullseye is mirrored so east is on the left).
 5. Stop. When the error is under 3' the panel says "ALIGNMENT GOOD ENOUGH FOR GUIDING"; under 1' it says "ALIGNMENT EXCELLENT".
 
 ## Phone access (optional)
-Settings > "Phone access: On". The plugin runs a small web server (default port 5050, PIN shown in Settings). On a phone on the same
-Wi-Fi open `http://<NINA PC IP>:5050`, enter the PIN, and use the same buttons, bullseye and calibration as the panel.
-Allow the port through Windows Firewall. Local network only.
+Settings > "Phone access: On". The plugin runs a small web server (default port 5050). Switching it on shows a random 6-digit
+pairing code (valid 15 minutes) in Settings. On a phone on the same Wi-Fi open `http://<NINA PC IP>:5050`, type the
+code once, and use the same buttons, bullseye and calibration as the panel. The phone then holds a long random session token.
+"New pairing code" makes a fresh code and signs every phone out. Wrong codes are throttled (3 tries, then locked 30 s, 60 s ... up to 15 min).
+Allow the port through Windows Firewall. Local network only; the traffic is plain HTTP, so use a network you trust.
+
+## Tests
+`dotnet test tests/PolarAlignLive.Tests/PolarAlignLive.Tests.csproj` runs the unit tests for the All Stop gate and the phone
+authentication (they run on every GitHub Actions build before the plugin is built).
 
 ## How it works
 - Each solve gives center RA/Dec + position angle. Three frames at three RA positions give the RA axis
