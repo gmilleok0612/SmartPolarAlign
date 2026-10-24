@@ -10,6 +10,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - run: dotnet test tests/PolarAlignLive.Tests/PolarAlignLive.Tests.csproj -c Release
       - run: dotnet build PolarAlignLive.csproj -c Release -o out
       - uses: actions/upload-artifact@v4
         with:
