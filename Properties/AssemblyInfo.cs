@@ -6,10 +6,10 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("Polar Align Live")]
 [assembly: AssemblyCompany("GRM")]
 [assembly: AssemblyDescription("Live plate-solve-based polar alignment with Polar Align Pro style arrows and bullseye.")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
 
-[assembly: AssemblyMetadata("MinimumApplicationVersion", "3.0.0.1")]
+[assembly: AssemblyMetadata("MinimumApplicationVersion", "3.2.0.9001")]
 [assembly: AssemblyMetadata("License", "MPL-2.0")]
 [assembly: AssemblyMetadata("LicenseURL", "https://www.mozilla.org/en-US/MPL/2.0/")]
 [assembly: AssemblyMetadata("Homepage", "https://github.com/gmilleok0612/SmartPolarAlign")]
